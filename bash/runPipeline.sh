@@ -24,12 +24,12 @@ module load SAMtools/1.3.1-GCC-5.3.0-binutils-2.25
 module load AdapterRemoval/2.2.1-foss-2016b
 module load GCC/5.4.0-2.26
 
-## Data files
-REFS=/data/biorefs/reference_genomes/ensembl-release-94/danio-rerio/
-GTF=${REFS}/Mus_musculus.GRCm38.93.chr.gtf
-
 ## Biohub/local
 featureCounts=/data/biohub/local/subread-1.5.2-Linux-x86_64/bin/featureCounts
+
+## Genomic Data Files
+REFS=/data/biorefs/reference_genomes/ensembl-release-94/danio-rerio/
+GTF=${REFS}/Danio_rerio.GRCz11.94.chr.gtf
 
 # # The STAR genome index was generated manually on clarence after mounting /data/biorefs
 # # STAR 2.6.0a was used for generation of the index, whilst STAR 2.5.3 will be 
@@ -83,9 +83,10 @@ for R1 in ${RAWDATA}/fastq/*R1.fq.gz
     BNAME=${TRIMDATA}/fastq/$(basename ${R1%_R1.fq.gz})
     echo -e "Output file 1 will be ${out1}"
 
-    echo "Trimming:\t ${R1}"
+    echo "Trimming:\t${R1}"
     # Trim
     AdapterRemoval \
+      --adapter1 AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC \
       --gzip \
       --trimns \
       --trimqualities \
