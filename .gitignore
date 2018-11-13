@@ -1,5 +1,4 @@
 *fq.gz
 *fastq.gz
-*bam
-*bai
-*sam
+*[bs]a[mi]
+.Rproj.user
