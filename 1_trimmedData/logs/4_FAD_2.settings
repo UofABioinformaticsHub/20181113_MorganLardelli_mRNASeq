@@ -1,0 +1,119 @@
+AdapterRemoval ver. 2.2.1a
+Trimming of single-end reads
+
+
+[Adapter sequences]
+Adapter1[1]: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+Adapter2[1]: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT
+
+
+[Adapter trimming]
+RNG seed: NA
+Alignment shift value: 2
+Global mismatch threshold: 0.333333
+Quality format (input): Phred+33
+Quality score max (input): 41
+Quality format (output): Phred+33
+Quality score max (output): 41
+Mate-number separator (input): '/'
+Trimming Ns: Yes
+Trimming Phred scores <= 20: Yes
+Trimming using sliding windows: No
+Minimum genomic length: 35
+Maximum genomic length: 4294967295
+Collapse overlapping reads: No
+Minimum overlap (in case of collapse): 11
+Minimum adapter overlap: 0
+
+
+[Trimming statistics]
+Total number of reads: 21471857
+Number of unaligned reads: 16586720
+Number of well aligned reads: 4885137
+Number of discarded mate 1 reads: 2936
+Number of singleton mate 1 reads: 21468921
+Number of reads with adapters[1]: 4885137
+Number of retained reads: 21468921
+Number of retained nucleotides: 1608317615
+Average length of retained reads: 74.9138
+
+
+[Length distribution]
+Length	Mate1	Discarded	All
+0	0	1993	1993
+1	0	16	16
+2	0	5	5
+3	0	24	24
+4	0	7	7
+5	0	6	6
+6	0	10	10
+7	0	13	13
+8	0	6	6
+9	0	5	5
+10	0	5	5
+11	0	4	4
+12	0	6	6
+13	0	6	6
+14	0	11	11
+15	0	10	10
+16	0	12	12
+17	0	22	22
+18	0	37	37
+19	0	28	28
+20	0	11	11
+21	0	17	17
+22	0	27	27
+23	0	30	30
+24	0	35	35
+25	0	35	35
+26	0	40	40
+27	0	55	55
+28	0	32	32
+29	0	55	55
+30	0	47	47
+31	0	69	69
+32	0	78	78
+33	0	89	89
+34	0	90	90
+35	94	0	94
+36	107	0	107
+37	90	0	90
+38	102	0	102
+39	123	0	123
+40	142	0	142
+41	156	0	156
+42	170	0	170
+43	212	0	212
+44	206	0	206
+45	261	0	261
+46	315	0	315
+47	338	0	338
+48	366	0	366
+49	432	0	432
+50	482	0	482
+51	626	0	626
+52	1143	0	1143
+53	941	0	941
+54	1308	0	1308
+55	1519	0	1519
+56	1870	0	1870
+57	4030	0	4030
+58	6327	0	6327
+59	5106	0	5106
+60	14894	0	14894
+61	15240	0	15240
+62	21416	0	21416
+63	30911	0	30911
+64	73575	0	73575
+65	47918	0	47918
+66	70386	0	70386
+67	11870	0	11870
+68	26686	0	26686
+69	54141	0	54141
+70	111274	0	111274
+71	141961	0	141961
+72	448442	0	448442
+73	1242509	0	1242509
+74	2786738	0	2786738
+75	6314571	0	6314571
+76	10029923	0	10029923

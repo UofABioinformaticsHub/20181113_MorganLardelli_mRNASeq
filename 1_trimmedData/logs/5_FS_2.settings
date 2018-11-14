@@ -1,0 +1,119 @@
+AdapterRemoval ver. 2.2.1a
+Trimming of single-end reads
+
+
+[Adapter sequences]
+Adapter1[1]: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+Adapter2[1]: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT
+
+
+[Adapter trimming]
+RNG seed: NA
+Alignment shift value: 2
+Global mismatch threshold: 0.333333
+Quality format (input): Phred+33
+Quality score max (input): 41
+Quality format (output): Phred+33
+Quality score max (output): 41
+Mate-number separator (input): '/'
+Trimming Ns: Yes
+Trimming Phred scores <= 20: Yes
+Trimming using sliding windows: No
+Minimum genomic length: 35
+Maximum genomic length: 4294967295
+Collapse overlapping reads: No
+Minimum overlap (in case of collapse): 11
+Minimum adapter overlap: 0
+
+
+[Trimming statistics]
+Total number of reads: 20528548
+Number of unaligned reads: 15884676
+Number of well aligned reads: 4643872
+Number of discarded mate 1 reads: 2574
+Number of singleton mate 1 reads: 20525974
+Number of reads with adapters[1]: 4643872
+Number of retained reads: 20525974
+Number of retained nucleotides: 1537840410
+Average length of retained reads: 74.9217
+
+
+[Length distribution]
+Length	Mate1	Discarded	All
+0	0	1714	1714
+1	0	13	13
+2	0	6	6
+3	0	21	21
+4	0	10	10
+5	0	5	5
+6	0	11	11
+7	0	11	11
+8	0	6	6
+9	0	4	4
+10	0	10	10
+11	0	2	2
+12	0	10	10
+13	0	9	9
+14	0	12	12
+15	0	12	12
+16	0	8	8
+17	0	19	19
+18	0	36	36
+19	0	26	26
+20	0	12	12
+21	0	25	25
+22	0	16	16
+23	0	26	26
+24	0	31	31
+25	0	35	35
+26	0	37	37
+27	0	48	48
+28	0	42	42
+29	0	40	40
+30	0	46	46
+31	0	67	67
+32	0	60	60
+33	0	72	72
+34	0	72	72
+35	68	0	68
+36	75	0	75
+37	80	0	80
+38	76	0	76
+39	112	0	112
+40	98	0	98
+41	129	0	129
+42	131	0	131
+43	151	0	151
+44	166	0	166
+45	223	0	223
+46	240	0	240
+47	226	0	226
+48	255	0	255
+49	267	0	267
+50	332	0	332
+51	507	0	507
+52	843	0	843
+53	644	0	644
+54	1055	0	1055
+55	1235	0	1235
+56	1497	0	1497
+57	3585	0	3585
+58	5774	0	5774
+59	4582	0	4582
+60	13506	0	13506
+61	14286	0	14286
+62	19577	0	19577
+63	29247	0	29247
+64	69596	0	69596
+65	44472	0	44472
+66	66442	0	66442
+67	10298	0	10298
+68	24858	0	24858
+69	50873	0	50873
+70	104566	0	104566
+71	134255	0	134255
+72	430231	0	430231
+73	1188037	0	1188037
+74	2664663	0	2664663
+75	6040361	0	6040361
+76	9598355	0	9598355

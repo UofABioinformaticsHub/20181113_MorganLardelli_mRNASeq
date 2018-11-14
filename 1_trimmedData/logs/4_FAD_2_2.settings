@@ -1,0 +1,119 @@
+AdapterRemoval ver. 2.2.1a
+Trimming of single-end reads
+
+
+[Adapter sequences]
+Adapter1[1]: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+Adapter2[1]: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGTAGATCTCGGTGGTCGCCGTATCATT
+
+
+[Adapter trimming]
+RNG seed: NA
+Alignment shift value: 2
+Global mismatch threshold: 0.333333
+Quality format (input): Phred+33
+Quality score max (input): 41
+Quality format (output): Phred+33
+Quality score max (output): 41
+Mate-number separator (input): '/'
+Trimming Ns: Yes
+Trimming Phred scores <= 20: Yes
+Trimming using sliding windows: No
+Minimum genomic length: 35
+Maximum genomic length: 4294967295
+Collapse overlapping reads: No
+Minimum overlap (in case of collapse): 11
+Minimum adapter overlap: 0
+
+
+[Trimming statistics]
+Total number of reads: 22712303
+Number of unaligned reads: 17547732
+Number of well aligned reads: 5164571
+Number of discarded mate 1 reads: 3033
+Number of singleton mate 1 reads: 22709270
+Number of reads with adapters[1]: 5164571
+Number of retained reads: 22709270
+Number of retained nucleotides: 1701033457
+Average length of retained reads: 74.9048
+
+
+[Length distribution]
+Length	Mate1	Discarded	All
+0	0	2045	2045
+1	0	7	7
+2	0	6	6
+3	0	20	20
+4	0	9	9
+5	0	12	12
+6	0	8	8
+7	0	12	12
+8	0	10	10
+9	0	8	8
+10	0	7	7
+11	0	3	3
+12	0	5	5
+13	0	7	7
+14	0	7	7
+15	0	7	7
+16	0	8	8
+17	0	14	14
+18	0	27	27
+19	0	39	39
+20	0	13	13
+21	0	32	32
+22	0	34	34
+23	0	25	25
+24	0	35	35
+25	0	44	44
+26	0	46	46
+27	0	32	32
+28	0	50	50
+29	0	65	65
+30	0	52	52
+31	0	76	76
+32	0	88	88
+33	0	103	103
+34	0	77	77
+35	83	0	83
+36	94	0	94
+37	112	0	112
+38	119	0	119
+39	114	0	114
+40	170	0	170
+41	169	0	169
+42	173	0	173
+43	208	0	208
+44	244	0	244
+45	284	0	284
+46	307	0	307
+47	307	0	307
+48	353	0	353
+49	380	0	380
+50	515	0	515
+51	638	0	638
+52	1128	0	1128
+53	940	0	940
+54	1455	0	1455
+55	1637	0	1637
+56	1994	0	1994
+57	4342	0	4342
+58	6815	0	6815
+59	5378	0	5378
+60	15620	0	15620
+61	16173	0	16173
+62	22849	0	22849
+63	32792	0	32792
+64	78293	0	78293
+65	50220	0	50220
+66	74309	0	74309
+67	12479	0	12479
+68	28970	0	28970
+69	58018	0	58018
+70	118486	0	118486
+71	153971	0	153971
+72	482546	0	482546
+73	1327315	0	1327315
+74	2965226	0	2965226
+75	6742977	0	6742977
+76	10501067	0	10501067

@@ -1,5 +1,6 @@
 *fq.gz
 *fastq.gz
+*discarded.gz
 *[bs]a[mi]
 slurm/*
 .Rproj.user
