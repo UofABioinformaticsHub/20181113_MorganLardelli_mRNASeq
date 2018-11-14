@@ -83,7 +83,7 @@ for R1 in ${RAWDATA}/fastq/*R1.fq.gz
     BNAME=${TRIMDATA}/fastq/$(basename ${R1%_R1.fq.gz})
     echo -e "Output file 1 will be ${out1}"
 
-    echo "Trimming:\t${R1}"
+    echo -e "Trimming:\t${R1}"
     # Trim
     AdapterRemoval \
       --adapter1 AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC \

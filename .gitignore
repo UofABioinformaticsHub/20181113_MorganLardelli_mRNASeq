@@ -1,4 +1,5 @@
 *fq.gz
 *fastq.gz
 *[bs]a[mi]
+slurm/*
 .Rproj.user
