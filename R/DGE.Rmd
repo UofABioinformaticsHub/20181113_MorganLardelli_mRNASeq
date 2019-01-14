@@ -36,6 +36,7 @@ ah <- AnnotationHub() %>%
 	subset(species == "Danio rerio") %>%
 	subset(rdataclass == "EnsDb")
 ensDb <- ah[["AH64906"]]
+genes <- genes(ensDb)
 ```
 
 
@@ -74,3 +75,7 @@ counts %>%
 ```
 
 **Counts are much lower than expected!!! This needs investigating.**
+
+It's quite likely these gene annotations are not quite right. 
+Checking "ENSDARG00000102141" showed a 2 base discrepancy at the exon-exon-junction for the first exon.
+IGV is unworkable from home...
