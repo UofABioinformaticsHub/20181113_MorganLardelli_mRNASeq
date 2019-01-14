@@ -6,13 +6,17 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+											message = FALSE, warning = FALSE)
 ```
 
 ```{r}
 library(ngsReports)
 library(edgeR)
+library(magrittr)
 library(tidyverse)
+library(ggrepel)
+theme_set(theme_bw())
 ```
 
 ## Load all FastQC summaries
@@ -40,32 +44,49 @@ rt <- list(
 				 Stage = factor(Stage, levels = c("Raw", "Trimmed", "Aligned")))
 ```
 
-```{r}
+```{r, echo=FALSE, fig.cap="*Summary of library sizes after each step. The slight increase after alignments indicates a low level of multiple alignments*"}
+plotly::ggplotly(
 rt %>%
 	ggplot(aes(Sample, Total_Sequences, fill = Stage)) +
 	geom_bar(stat = "identity", position = "dodge") +
-	scale_y_continuous(labels = scales::comma) +
+	scale_y_continuous(labels = scales::comma, 
+										 expand = expand_scale(mult = c(0, 0.05))) +
 	theme_bw() +
 	theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+)
 ```
 
-- Multiple aligments don't appear to be much of an issue
+- Multiple alignments don't appear to be much of an issue
 - Trimming made little change to the library sizes
-- All samples were run in tehcnical duplicates which can be combined for DE analysis
+- All samples were run in technical duplicates which can be combined for DE analysis
 
 # Gene-level Counts
 
+Gene-level counts were loaded without filtering and an MDS plot generated in order to check whether replicate libraries grouped correctly.
+
 ```{r}
 counts <- read_tsv("../2_alignedData/featureCounts/genes.out") %>%
-	set_colnames(basename(colnames(.))) %>%
-	set_colnames(str_remove_all(colnames(.), "Aligned.sortedByCoord.out.bam"))
+	set_names(basename(colnames(.))) %>%
+	set_names(str_remove_all(colnames(.), "Aligned.sortedByCoord.out.bam"))
 ```
 
 ```{r}
 dge <- counts %>% 
 	as.data.frame() %>%
 	column_to_rownames("Geneid") %>%
-	DGEList()
+	DGEList() %>%
+	calcNormFactors()
+dge$samples %<>%
+	rownames_to_column("library") %>%
+	mutate(Genotype = str_extract_all(library, "(FAD|FS|__)"),
+				 Genotype = str_replace_all(Genotype, "__", "WT"),
+				 Genotype = factor(Genotype, levels = c("WT", "FS", "FAD")),
+				 Sample = str_replace(library, "__-", "_WT"),
+				 Sample = ifelse(str_count(Sample, "_") == 3, Sample, paste0(Sample, "_1")),
+				 Replicate = str_extract(Sample, "[12]$"),
+				 Sample = str_remove(Sample, "_[12]$"),
+				 group = as.integer(Genotype)) %>%
+	column_to_rownames("library")
 ```
 
 ```{r}
@@ -74,7 +95,15 @@ mds <- plotMDS(dge, plot = FALSE) %>%
 	set_colnames(paste0("Dim", 1:2)) %>%
 	as.data.frame() %>%
 	rownames_to_column("Library") %>%
-	as_data_frame() 
+	as_tibble() 
 ```
 
-Check replicate samples
+
+```{r, echo=FALSE, fig.cap = "*Plot of replicate libraries showing good concordance between replicates. These will be combined and low-expressed genes removed for the DE analysis*"}
+mds %>%
+	cbind(dge$samples[.$Library,]) %>%
+	ggplot(aes(Dim1, Dim2, colour = Genotype, label = Sample)) +
+	geom_point() +
+	geom_text_repel()
+```
+
