@@ -14,8 +14,10 @@ knitr::opts_chunk$set(echo = TRUE,
 library(ngsReports)
 library(edgeR)
 library(magrittr)
+library(scales)
 library(tidyverse)
 library(ggrepel)
+library(pander)
 theme_set(theme_bw())
 ```
 
@@ -30,7 +32,7 @@ alnFqc <- list.files("../2_alignedData/FastQC/", pattern = "zip$", full.names = 
 	getFastqcData()
 ```
 
-## Read Totals
+### Read Totals
 
 ```{r}
 rt <- list(
@@ -60,7 +62,71 @@ rt %>%
 - Trimming made little change to the library sizes
 - All samples were run in technical duplicates which can be combined for DE analysis
 
-# Gene-level Counts
+### GC Content
+
+No unusual behaviour was found in GC content.
+
+```{r, echo=FALSE, fig.cap="*GC content for raw data*"}
+plotGcContent(rawFqc, plotType = "line", species = "Drerio", theoreticalType = "transcriptome")
+```
+
+```{r, echo=FALSE, fig.cap="*GC content for aligned data*"}
+plotGcContent(alnFqc, plotType = "line", species = "Drerio", theoreticalType = "transcriptome", pattern = "Aligned.+")
+```
+
+### Duplication Levels
+
+No issues were evident with regard to duplication levels
+
+```{r, echo=FALSE, fig.cap = "*Duplication levels for raw data*"}
+plotDuplicationLevels(rawFqc, pattern = "_R1.+")
+```
+
+```{r, echo=FALSE, fig.cap = "*Duplication levels for aligned data*"}
+plotDuplicationLevels(alnFqc, pattern = "Aligned.+")
+```
+
+## Alignment Rate
+
+Alignment rates were also very good
+
+```{r}
+alnLogs <- list.files("../2_alignedData/logs/", full.names = TRUE, pattern = "final.out") %>%
+	importStarLogs()
+```
+
+```{r, echo=FALSE, fig.cap="*Alignment summaries for all libraries (before merging replicates)*"}
+alnLogs %>%
+	rename(Library = Filename) %>%
+  dplyr::select(Library, 
+                Number_Of_Input_Reads,
+                Uniquely_Mapped_Reads_Number, 
+                Number_Of_Reads_Mapped_To_Multiple_Loci,
+                Number_Of_Reads_Mapped_To_Too_Many_Loci) %>%
+  mutate(Unmapped = Number_Of_Input_Reads - Uniquely_Mapped_Reads_Number - Number_Of_Reads_Mapped_To_Multiple_Loci - Number_Of_Reads_Mapped_To_Too_Many_Loci) %>%
+  gather("Type", "Total", -Library, -Number_Of_Input_Reads) %>%
+  mutate(Library = str_remove_all(Library, "Log.final.out"),
+  			 Library = str_replace(Library, "__-", "_WT"),
+  			 Genotype = str_extract(Library, "(FAD|FS|WT)"),
+         Type = str_remove_all(Type, "(Number_Of_Reads_|_Reads_Number)"),
+         Type = factor(Type, levels = c("Unmapped", "Mapped_To_Too_Many_Loci", "Mapped_To_Multiple_Loci", "Uniquely_Mapped")),
+         Percent = percent(Total / Number_Of_Input_Reads),
+         Number_Of_Reads = comma(Total)) %>%
+  ggplot(aes(Library, Total, fill = Type, percent = Percent)) +
+  geom_bar(stat = "identity") +
+  facet_grid(~Genotype, scales = "free_x", space = "free_x") +
+  scale_y_continuous(labels = scales::comma, 
+                     expand = expand_scale(c(0, 0.05))) +
+  scale_fill_manual(values = c("grey50", "red", "yellow", rgb(0, 0.8, 0.15))) +
+  labs(x = "Library",
+       y = "Total Reads") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+
+## Gene-level Counts
+
+### MDS Plot
 
 Gene-level counts were loaded without filtering and an MDS plot generated in order to check whether replicate libraries grouped correctly.
 
@@ -107,3 +173,7 @@ mds %>%
 	geom_text_repel()
 ```
 
+### Library sizes
+
+It was noted that library sizes were about 10-20 fold smaller than expected after summarising to gene level counts and these ranged between `r pander(comma(range(dge$samples$lib.size)))`.
+Alignments were then inspected manually in order to ascertain the cause of this low counting rate.
