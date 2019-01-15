@@ -148,7 +148,7 @@ sampleList=`find ${ALIGNDATA}/bams -name "*out.bam" | tr '\n' ' '`
 
 ## Running featureCounts on the sorted bam files
 ${featureCounts} -Q 10 \
-  -s 2 \
+  -s 1 \
   -T ${CORES} \
   -a ${GTF} \
   -o ${ALIGNDATA}/featureCounts/counts.out ${sampleList}
