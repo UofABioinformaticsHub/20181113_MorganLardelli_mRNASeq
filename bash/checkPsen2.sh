@@ -21,6 +21,7 @@ OUTDIR=${PROJDIR}/1_trimmedData/psen2checks
 mkdir -p ${OUTDIR}
 # Clean up any other files which may be lying around
 rm -f ${OUTDIR}/*
+echo -e "Filename\tWT\tFAD\tFS" > ${OUTDIR}/psen.txt
 
 FILES=$(ls ${PROJDIR}/1_trimmedData/fastq/*R1.fq.gz)
 
@@ -28,11 +29,9 @@ for F in $FILES
   do
   
   echo -e "Currently checking ${F}"
-  N=$(zcat ${F} | egrep -c ${WT})
-  echo -e "$(basename ${F})\t${N}" >> ${OUTDIR}/wt.txt
-  N=$(zcat ${F} | egrep -c ${FAD})
-  echo -e "$(basename ${F})\t${N}" >> ${OUTDIR}/fad.txt
-  N=$(zcat ${F} | egrep -c ${FS})
-  echo -e "$(basename ${F})\t${N}" >> ${OUTDIR}/fs.txt
+  NWT=$(zcat ${F} | egrep -c ${WT})
+  NFAD=$(zcat ${F} | egrep -c ${FAD})
+  NFS=$(zcat ${F} | egrep -c ${FS})
+  echo -e "$(basename ${F})\t${NWT}\t${NFAD}\t${NFS}" >> ${OUTDIR}/psen.txt
   
   done
