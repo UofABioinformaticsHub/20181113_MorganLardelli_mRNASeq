@@ -109,7 +109,7 @@ dge$samples %<>%
 ```
 
 ```{r voom}
-v <- voomWithQualityWeights(dge)
+v <- voomWithQualityWeights(dge, design = matrix(rep(1, ncol(dge)), ncol = 1))
 ```
 
 Counts were also processed using the `voom` transformation using quality weights to allow for analysis using normal-based algorithms.
@@ -163,6 +163,48 @@ dge %>%
 	pander(caption = paste("*First five principal components, showing that the first two only account for", percent(.[3,2]), "of the total variance.*"))
 ```
 
+### Genotype checks
+
+In order to confirm the genotypes of all libraries, three seed sequences were searched in the trimmed reads (i.e. before alignment) which represented the WT, FAD or FS genotypes.
+The number of matches to each of the seeds was counted for each sample as a simple strategy for confirming genotypes.
+
+```{r, echo=FALSE}
+readLines("../bash/checkPsen2.sh") %>%
+	grep(pattern = "^(WT|FAD|FS)", x = ., value = TRUE) %>% 
+	as.data.frame() %>% 
+	set_colnames("X") %>% 
+	mutate(X = gsub("=", "_", X)) %>% 
+	separate(X, into = c("Genotype", "Seed")) %>% 
+	pander(caption = "Genotypes & Seed sequences use for genotype checking")
+```
+
+```{r, echo=FALSE}
+read_tsv("../1_trimmedData/psen2checks/psen.txt") %>%
+	mutate(Filename = str_remove(Filename, "_R1.fq.gz"),
+				 Filename = str_replace(Filename, "__-", "_WT"),
+				 Sample = str_extract(Filename, "[0-9]+_[A-Z]+_[0-9]+")) %>%
+	group_by(Sample) %>% 
+	summarise_at(c("WT", "FAD", "FS"), sum) %>%
+	left_join(dge$samples) %>%
+	mutate(Observed = case_when(
+		FAD == 0 & FS == 0 ~ "WT",
+		FAD > 0 & FS == 0 ~ "FAD",
+		FAD == 0 & FS > 0 ~ "FS"
+	)) %>%
+	dplyr::select(Sample, WT, FAD, FS, Genotype, Observed) %>%
+	mutate(Confirmed = Observed == Genotype) %>%
+	pander(caption = "Results from genotype checks based on seed sequences")
+```
+
+One sample (`8_FS_4`) was labelled as an FS sample but presented with the contradictory FAD genotype and this was investgated manually.
+Notably, no WT or FS reads were found in this sample using this simple strategy.
+
+```{r}
+dge$samples["8_FS_4","Genotype"] <- "FAD"
+v$targets["8_FS_4","Genotype"] <- "FAD"
+```
+
+
 ### Comparisons
 
 ```{r}
@@ -184,11 +226,12 @@ vFit <- v %>%
 	eBayes()
 ```
 
-```{r}
+```{r, eval=FALSE}
 colnames(cm) %>%
-	lapply(function(x){
-		topTable(vFit, x)
-	})
+	sapply(function(x){
+		topTable(vFit, x) %>%
+			mutate(Comparison = x)
+	}, simplify = FALSE)
 ```
 
 
