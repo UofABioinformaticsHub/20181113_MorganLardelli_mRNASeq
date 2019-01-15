@@ -165,15 +165,61 @@ mds <- plotMDS(dge, plot = FALSE) %>%
 ```
 
 
-```{r, echo=FALSE, fig.cap = "*Plot of replicate libraries showing good concordance between replicates. These will be combined and low-expressed genes removed for the DE analysis*"}
+```{r, echo=FALSE, fig.cap = "*Plot of replicate libraries showing good concordance between replicates. These will be combined and low-expressed genes removed for the DE analysis. However, minimal separation between groups was noted in this pre-filtered stage.*"}
 mds %>%
 	cbind(dge$samples[.$Library,]) %>%
 	ggplot(aes(Dim1, Dim2, colour = Genotype, label = Sample)) +
 	geom_point() +
-	geom_text_repel()
+	geom_text_repel() +
+	guides(label = FALSE)
 ```
 
 ### Library sizes
 
-It was noted that library sizes were about 10-20 fold smaller than expected after summarising to gene level counts and these ranged between `r pander(comma(range(dge$samples$lib.size)))`.
-Alignments were then inspected manually in order to ascertain the cause of this low counting rate.
+Library sizes after summarising to the gene-level were also checked.
+
+```{r}
+counts <- read_tsv("../2_alignedData/featureCounts/genes.out") %>%
+	set_names(basename(colnames(.))) %>%
+	set_names(str_remove_all(colnames(.), "Aligned.sortedByCoord.out.bam")) 
+```
+
+```{r, echo=FALSE, fig.cap="*Total counts from each library*"}
+counts %>% 
+	as.data.frame() %>%
+	column_to_rownames("Geneid") %>%
+	colSums() %>%
+	as.data.frame() %>%
+	set_names("Counts") %>%
+	rownames_to_column("Library") %>%
+	as_tibble() %>%
+	mutate(Library = str_replace_all(Library, "__-", "_WT"),
+				 Sample = case_when(
+				 	str_count(Library, "_") == 2 ~ paste0(Library, "_1"),
+				 	str_count(Library, "_") == 3 ~ Library
+				 ),
+				 Replicate = str_extract(Sample, "[12]$"),
+				 Sample = str_remove_all(Sample, "_[12]$"),
+				 Genotype = str_extract(Sample, "(FAD|FS|WT)")) %>%
+	ggplot(aes(Sample, Counts, fill = Replicate)) +
+	geom_bar(stat = "identity") +
+	scale_y_continuous(labels = comma, expand = expand_scale(c(0, 0.05))) +
+	scale_fill_manual(values = RColorBrewer::brewer.pal(3, "Set1")[1:2]) +
+	facet_wrap(~Genotype, scales = "free_x") +
+	theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+```{r echo = FALSE}
+counts %>%
+	summarise_at(vars(-contains("Geneid")), sum) %>%
+	gather(key = "Library", value = "Counts") %>%
+	mutate(Filename = paste0(Library, "Aligned.sortedByCoord.out.bam")) %>%
+	right_join(readTotals(alnFqc)) %>%
+	mutate(Proportion = Counts / Total_Sequences) %>%
+	dplyr::filter(Proportion == min(Proportion) | Proportion == max(Proportion)) %>%
+	mutate(Percent = percent(Proportion)) %>%
+	dplyr::select(Library, `Total Alignments` = Total_Sequences, Counts, Percent) %>%
+	pander(caption = "*Libraries showing the lowest and highest assignment rate to genes as a percentage. All other samples were somewhere between these values for alignments assigned to genes during counting by `featureCounts`. This was considered to be normal*",
+				 big.mark = ",")
+```
+

@@ -68,14 +68,9 @@ counts %>%
 				 Genotype = str_extract(Sample, "(FAD|FS|WT)")) %>%
 	ggplot(aes(Sample, Counts, fill = Replicate)) +
 	geom_bar(stat = "identity") +
-	scale_y_continuous(labels = comma) +
+	scale_y_continuous(labels = comma, expand = expand_scale(c(0, 0.05))) +
 	scale_fill_manual(values = RColorBrewer::brewer.pal(3, "Set1")[1:2]) +
 	facet_wrap(~Genotype, scales = "free_x") +
 	theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 ```
 
-**Counts are much lower than expected!!! This needs investigating.**
-
-It's quite likely these gene annotations are not quite right. 
-Checking "ENSDARG00000102141" showed a 2 base discrepancy at the exon-exon-junction for the first exon.
-IGV is unworkable from home...
