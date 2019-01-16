@@ -2,7 +2,7 @@
 #SBATCH -p batch
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH --time=00:30:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=4GB
 #SBATCH -o /data/biohub/20181113_MorganLardelli_mRNASeq/slurm/%x_%j.out
 #SBATCH -e /data/biohub/20181113_MorganLardelli_mRNASeq/slurm/%x_%j.err
@@ -37,6 +37,7 @@ OUTBAM=${OUTDIR}/$(basename ${F1%_R1.fq.gz}.bam)
 echo -e "Currently aligning:\n\t${F1}\n\t${F2}"
 echo -e "Output will be written to ${OUTDIR}"
 kallisto quant \
+	-b 20 \
 	--pseudobam \
 	--single \
 	--fr-stranded \

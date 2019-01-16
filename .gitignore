@@ -5,3 +5,4 @@
 slurm/*
 .Rproj.user
 .Rhistory
+*abundance.tsv
