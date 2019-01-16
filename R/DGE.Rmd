@@ -37,7 +37,8 @@ ah <- AnnotationHub() %>%
 	subset(species == "Danio rerio") %>%
 	subset(rdataclass == "EnsDb")
 ensDb <- ah[["AH64906"]]
-genes <- genes(ensDb)
+genes <- genes(ensDb) 
+mcols(genes) <- mcols(genes)[!names(mcols(genes)) %in% c("seq_coord_system", "gene_name")]
 ```
 
 
@@ -109,7 +110,8 @@ dge$samples %<>%
 ```
 
 ```{r voom}
-v <- voomWithQualityWeights(dge, design = matrix(rep(1, ncol(dge)), ncol = 1))
+v <- dge %>%
+	voomWithQualityWeights(design = matrix(rep(1, ncol(.)), ncol = 1))
 ```
 
 Counts were also processed using the `voom` transformation using quality weights to allow for analysis using normal-based algorithms.
@@ -124,43 +126,6 @@ v$targets %>%
 	scale_y_continuous(expand = expand_scale(c(0, 0.05))) +
 	labs(y = "Sample Weight") +
 	theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
-```
-
-
-## Analysis
-
-### Data Inspection
-
-The first step for the analysis was to perform an MDS analysis.
-However, minimal separation was observed between sample groups, with the exception of the most strongly down-weighted sample, which separated very clearly from the remainder of the points.
-This sample may be a candidate for exclusion if no differentially expressed genes are able to be detected.
-A simple PCA also revealed that the first few principal components only capture a lesser amount of the total variability than may be expected.
-
-```{r mds}
-mds <- plotMDS(v, plot = FALSE) %>%
-	extract2("cmdscale.out") %>%
-	set_colnames(paste0("Dim", 1:2))
-```
-
-```{r, echo=FALSE, fig.cap = "*MDS plot showing no clear groups within the data. Point sizes indicate sample weights as calculated by `voomWithQualityWeights()`.*"}
-plotly::ggplotly(mds %>%
-	cbind(dge$samples[rownames(.),]) %>%
-	cbind(w = v$targets[rownames(.), "sample.weights"]) %>%
-	ggplot(aes(Dim1, Dim2, colour = Genotype, size = w, label = Sample)) +
-	geom_point() +
-	guides(size = FALSE)
-)
-```
-
-```{r, echo=FALSE}
-dge %>%
-	cpm(log = TRUE) %>%
-	t() %>%
-	prcomp() %>%
-	summary() %>%
-	extract2("importance") %>%
-	magrittr::extract(,paste0("PC", 1:5)) %>%
-	pander(caption = paste("*First five principal components, showing that the first two only account for", percent(.[3,2]), "of the total variance.*"))
 ```
 
 ### Genotype checks
@@ -205,6 +170,46 @@ v$targets["8_FS_4","Genotype"] <- "FAD"
 ```
 
 
+### Data Inspection
+
+The first step for the analysis was to perform an MDS analysis.
+However, minimal separation was observed between sample groups, with the exception of the most strongly down-weighted sample, which separated very clearly from the remainder of the points.
+This sample may be a candidate for exclusion if no differentially expressed genes are able to be detected.
+A simple PCA also revealed that the first few principal components only capture a lesser amount of the total variability than may be expected.
+
+```{r mds}
+mds <- v %>%
+	magrittr::extract(,!colnames(.) %in% c("8_FS_4", "12_WT_4")) %>%
+	plotMDS(plot = FALSE) %>%
+	extract2("cmdscale.out") %>%
+	set_colnames(paste0("Dim", 1:2))
+```
+
+```{r, echo=FALSE, fig.cap = "*MDS plot showing no clear groups within the data. Point sizes indicate sample weights as calculated by `voomWithQualityWeights()`.*"}
+plotly::ggplotly(mds %>%
+	cbind(dge$samples[rownames(.),]) %>%
+	cbind(w = v$targets[rownames(.), "sample.weights"]) %>%
+	ggplot(aes(Dim1, Dim2, colour = Genotype, size = w, label = Sample)) +
+	geom_point() +
+	guides(size = FALSE)
+)
+```
+
+```{r, echo=FALSE}
+dge %>%
+	magrittr::extract(,!colnames(.) %in% c("8_FS_4", "12_WT_4")) %>%
+	cpm(log = TRUE) %>%
+	t() %>%
+	prcomp() %>%
+	summary() %>%
+	extract2("importance") %>%
+	magrittr::extract(,paste0("PC", 1:5)) %>%
+	pander(caption = paste("*First five principal components, showing that the first two only account for", percent(.[3,2]), "of the total variance.*"))
+```
+
+
+## Analysis
+
 ### Comparisons
 
 ```{r}
@@ -229,7 +234,7 @@ vFit <- v %>%
 ```{r, eval=FALSE}
 colnames(cm) %>%
 	sapply(function(x){
-		topTable(vFit, x) %>%
+		topTable(vFit, x, sort.by = "p") %>%
 			mutate(Comparison = x)
 	}, simplify = FALSE)
 ```
