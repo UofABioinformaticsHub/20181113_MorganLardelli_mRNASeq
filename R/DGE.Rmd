@@ -61,8 +61,10 @@ transcripts %<>%
 	unlist() %>%
 	sort()
 transcripts$symbol <- mcols(genes[transcripts$gene_id])$symbol
-tx2gene <- mcols(transcripts)[c("tx_id_version", "gene_id")] 
+# tx2gene <- mcols(transcripts)[c("tx_id_version", "gene_id")] 
+tx2gene <- mcols(transcripts)[c("tx_id_version", "symbol")] 
 ```
+
 
 ### Gene-level Counts
 
@@ -74,13 +76,15 @@ geneCounts <- list.files("../3_kallisto/", recursive = TRUE, pattern = "h5", ful
 ```
 
 Gene-level counts were imported using `tximport`, mapping transcripts to genes.
+Some genes exist in the primary assembly and on alternate assemblies for specific regions, and these were considered as separate transcripts of the same gene for read summarisation purposes. 
+Transcript counts were thus mapped to genes using the gene symbol (e.g. *psen2*), instead of the gene id.
 
 ```{r dge}
 minCpm <- 1
 minSamples <- 5
 dge <- geneCounts$counts %>%
 	magrittr::extract(rowSums(cpm(.) > minCpm) >= minSamples,) %>%
-	DGEList(genes = genes[rownames(.)]) %>%
+	DGEList() %>%
 	calcNormFactors()
 dge$samples %<>%
 	mutate(Sample = rownames(.),
@@ -254,19 +258,14 @@ geneFit <- geneVoom %>%
 geneTopTabs <- colnames(cm) %>%
 	sapply(function(x){
 		topTable(geneFit, x, sort.by = "p", n = Inf) %>%
+			rownames_to_column("symbol") %>%
 			as_tibble() %>%
 			dplyr::rename(FDR = adj.P.Val) %>%
 			mutate(Comparison = x,
-						 Sig = FDR < 0.05,
-						 Region = paste0(as.character(seqnames), ":", start, "-", end, ":", as.character(strand))) %>%
-			dplyr::select(gene_id, symbol, logFC, AveExpr, t, P.Value, FDR, description, Region, gene_biotype, Sig)
+						 Sig = FDR < 0.05) %>%
+			dplyr::select(symbol, logFC, AveExpr, t, P.Value, FDR, Sig)
 	}, simplify = FALSE)
 ```
-
-```{r geneLabeller}
-geneLabeller <- as_labeller(structure(dge$genes$symbol, names = dge$genes$gene_id))
-```
-
 
 ### FS Vs WT
 
@@ -310,35 +309,34 @@ geneTopTabs$FSvWT %>%
 ```{r, echo=FALSE}
 geneTopTabs$FSvWT %>%
 	dplyr::slice(1:10) %>%
-	dplyr::select(ID = gene_id, 
-								Symbol = symbol, 
-								logFC, AveExpr, P.Value, FDR, description) %>%
-	mutate(description = str_remove(description, " \\[Source.+"),
-				 `Brief Description` = gsub("([^ ]+) ([^ ]+) ([^ ]+) .+", "\\1 \\2 \\3...", description)) %>%
-	dplyr::select(-description) %>%
+	dplyr::select(Symbol = symbol, 
+								logFC, AveExpr, P.Value, FDR) %>%
 	pander(split.tables = Inf,
 				 style = "rmarkdown",
-				 justify = "llrrrrl",
+				 justify = "lrrrr",
 				 caption = "*10 most highly ranked genes in the comparison between psen2^N140fs/+^ samples and psen2^+/+^ samples*")
 ```
 
-```{r, echo=FALSE, fig.cap = "*Expression patterns for significantly DE genes in the comparison between psen2^N140fs/+^ samples and psen2^+/+^ samples*"}
-cpm(dge, log = TRUE) %>%
-	magrittr::extract(geneTopTabs$FSvWT$gene_id[1:nSig],) %>%
+```{r, echo=FALSE, fig.cap = "*Expression patterns for significantly DE genes in the comparison between psen2^N140fs/+^ samples and psen2^+/+^ samples. Values are given as CPM using an offset of 1 to avoid zeroes, with the y-axis being displayed on the log scale.*"}
+cpm(dge) %>% 
+	add(1) %>%
+	magrittr::extract(geneTopTabs$FSvWT$symbol[1:nSig],) %>%
 	as.data.frame() %>%
 	rownames_to_column("ID") %>%
 	gather(key = "Sample", value = "CPM", -ID) %>%
 	as_tibble() %>%
 	left_join(dge$samples) %>%
 	ggplot(aes(Genotype, CPM, fill = Genotype)) +
-	geom_boxplot() + 
-	facet_wrap(~ID, scales = "free_y", labeller = geneLabeller) +
-	theme(legend.position = c(5/6, 1/4))
+	geom_boxplot() +
+	scale_y_log10() +
+	facet_wrap(~ID, scales = "free_y") +
+	labs(y = "CPM + 1")
 ```
 
-```{r, echo=FALSE, fig.cap = "*Expression patterns for the next most highly ranked genes in the comparison between psen2^N140fs/+^ samples and psen2^+/+^ samples, but which are not formally considered as DE*"}
-cpm(dge, log = TRUE) %>%
-	magrittr::extract(geneTopTabs$FSvWT$gene_id[seq(nSig + 1, length.out = 5)],) %>%
+```{r, echo=FALSE, fig.cap = "*Expression patterns for the next most highly ranked genes in the comparison between psen2^N140fs/+^ samples and psen2^+/+^ samples, but which are not formally considered as DE. Values are given as CPM using an offset of 1 to avoid zeroes, with the y-axis being displayed on the log scale.*"}
+cpm(dge) %>% 
+	add(1) %>%
+	magrittr::extract(geneTopTabs$FSvWT$symbol[seq(nSig + 1, length.out = 6)],) %>%
 	as.data.frame() %>%
 	rownames_to_column("ID") %>%
 	gather(key = "Sample", value = "CPM", -ID) %>%
@@ -346,8 +344,9 @@ cpm(dge, log = TRUE) %>%
 	left_join(dge$samples) %>%
 	ggplot(aes(Genotype, CPM, fill = Genotype)) +
 	geom_boxplot() + 
-	facet_wrap(~ID, scales = "free_y", labeller = geneLabeller) +
-	theme(legend.position = c(5/6, 1/4))
+	scale_y_log10() +
+	facet_wrap(~ID, scales = "free_y") +
+		labs(y = "CPM + 1")
 ```
 
 ### FAD Vs WT
@@ -369,9 +368,9 @@ geneTopTabs$FADvWT %>%
 	ggplot(aes(AveExpr, logFC, colour = Sig)) +
 	geom_point() +
 	geom_text_repel(aes(label = symbol),
-									. %>% dplyr::filter(logFC > 7.5)) +
+									. %>% dplyr::filter(logFC > 5)) +
 	geom_text_repel(aes(label = symbol),
-									. %>% dplyr::filter(logFC < -5)) +
+									. %>% dplyr::filter(logFC < -3.5)) +
 	scale_colour_manual(values = c(rgb(0.4, 0.4, 0.4, 0.4), "red")) +
 	labs(x = "Average Expression (CPM)") +
 	ggtitle(expression(paste(italic(psen2^"T141_L142delinsMISLISV/+"), " Vs. ", italic(psen2^"+/+")))) +
@@ -385,9 +384,9 @@ geneTopTabs$FADvWT %>%
 	ggplot(aes(logFC, -log10(P.Value), colour = Sig)) +
 	geom_point() +
 	geom_text_repel(aes(label = symbol),
-									. %>% dplyr::filter(logFC > 7.5)) +
+									. %>% dplyr::filter(logFC > 5)) +
 	geom_text_repel(aes(label = symbol),
-									. %>% dplyr::filter(logFC < -5)) +
+									. %>% dplyr::filter(logFC < -3.5)) +
 	scale_colour_manual(values = c(rgb(0.4, 0.4, 0.4, 0.4), "red")) +
 	scale_x_continuous(breaks = seq(-8, 8, by = 2)) +
 	labs(y = expression(paste(-log[10], "p"))) +
@@ -399,21 +398,18 @@ geneTopTabs$FADvWT %>%
 ```{r, echo=FALSE}
 geneTopTabs$FADvWT %>%
 	dplyr::slice(1:10) %>%
-	dplyr::select(ID = gene_id, 
-								Symbol = symbol, 
-								logFC, AveExpr, P.Value, FDR, description) %>%
-	mutate(description = str_remove(description, " \\[Source.+"),
-				 `Brief Description` = gsub("([^ ]+) ([^ ]+) ([^ ]+) .+", "\\1 \\2 \\3...", description)) %>%
-	dplyr::select(-description) %>%
-	pander(split.tables = Inf,
+	dplyr::select(Symbol = symbol, 
+								logFC, AveExpr, P.Value, FDR) %>%
+		pander(split.tables = Inf,
 				 style = "rmarkdown",
-				 justify = "llrrrrl",
+				 justify = "lrrrr",
 				 caption = "*10 most highly ranked genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^+/+^ samples*")
 ```
 
-```{r, echo=FALSE, fig.cap = "*Expression patterns for the 5 most highly ranked genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^+/+^ samples. None were considered as DE*"}
-cpm(dge, log = TRUE) %>%
-	magrittr::extract(geneTopTabs$FADvWT$gene_id[1:5],) %>%
+```{r, echo=FALSE, fig.cap = "*Expression patterns for the 5 most highly ranked genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^+/+^ samples. None were considered as DE. Values are given as CPM using an offset of 1 to avoid zeroes, with the y-axis being displayed on the log scale.*"}
+cpm(dge) %>% 
+	add(1) %>%
+	magrittr::extract(geneTopTabs$FADvWT$symbol[1:5],) %>%
 	as.data.frame() %>%
 	rownames_to_column("ID") %>%
 	gather(key = "Sample", value = "CPM", -ID) %>%
@@ -421,7 +417,8 @@ cpm(dge, log = TRUE) %>%
 	left_join(dge$samples) %>%
 	ggplot(aes(Genotype, CPM, fill = Genotype)) +
 	geom_boxplot() + 
-	facet_wrap(~ID, scales = "free_y", labeller = geneLabeller) +
+	facet_wrap(~ID, scales = "free_y") +
+	scale_y_log10() +
 	theme(legend.position = c(5/6, 1/4))
 ```
 
@@ -469,21 +466,18 @@ geneTopTabs$FADvFS %>%
 ```{r, echo=FALSE}
 geneTopTabs$FADvFS %>%
 	dplyr::slice(1:10) %>%
-	dplyr::select(ID = gene_id, 
-								Symbol = symbol, 
-								logFC, AveExpr, P.Value, FDR, description) %>%
-	mutate(description = str_remove(description, " \\[Source.+"),
-				 `Brief Description` = gsub("([^ ]+) ([^ ]+) ([^ ]+) .+", "\\1 \\2 \\3...", description)) %>%
-	dplyr::select(-description) %>%
+	dplyr::select(Symbol = symbol, 
+								logFC, AveExpr, P.Value, FDR) %>%
 	pander(split.tables = Inf,
 				 style = "rmarkdown",
-				 justify = "llrrrrl",
+				 justify = "lrrrr",
 				 caption = "*10 most highly ranked genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^N140fs/+^ samples*")
 ```
 
 ```{r, echo=FALSE, fig.cap = "*Expression patterns for significantly DE genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^N140fs/+^ samples. This is essentially a subset of the previously identified genes*", fig.height=4}
-cpm(dge, log = TRUE) %>%
-	magrittr::extract(geneTopTabs$FADvFS$gene_id[1:nSig],) %>%
+cpm(dge) %>% 
+	add(1) %>%
+	magrittr::extract(geneTopTabs$FADvFS$symbol[1:nSig],) %>%
 	as.data.frame() %>%
 	rownames_to_column("ID") %>%
 	gather(key = "Sample", value = "CPM", -ID) %>%
@@ -491,12 +485,14 @@ cpm(dge, log = TRUE) %>%
 	left_join(dge$samples) %>%
 	ggplot(aes(Genotype, CPM, fill = Genotype)) +
 	geom_boxplot() + 
-	facet_wrap(~ID, scales = "free_y", labeller = geneLabeller) 
+	facet_wrap(~ID, scales = "free_y") +
+	scale_y_log10()
 ```
 
 ```{r, echo=FALSE, fig.cap = "*Expression patterns for the next most highly ranked genes in the comparison between psen2^T141_L142delinsMISLISV/+^ samples and psen2^N140fs/+^ samples, but which are not formally considered as DE*"}
-cpm(dge, log = TRUE) %>%
-	magrittr::extract(geneTopTabs$FADvFS$gene_id[seq(nSig + 1, length.out = 5)],) %>%
+cpm(dge) %>% 
+	add(1) %>%
+	magrittr::extract(geneTopTabs$FADvFS$symbol[seq(nSig + 1, length.out = 5)],) %>%
 	as.data.frame() %>%
 	rownames_to_column("ID") %>%
 	gather(key = "Sample", value = "CPM", -ID) %>%
@@ -504,7 +500,8 @@ cpm(dge, log = TRUE) %>%
 	left_join(dge$samples) %>%
 	ggplot(aes(Genotype, CPM, fill = Genotype)) +
 	geom_boxplot() + 
-	facet_wrap(~ID, scales = "free_y", labeller = geneLabeller) +
+	facet_wrap(~ID, scales = "free_y") +
+	scale_y_log10() +
 	theme(legend.position = c(5/6, 1/4))
 ```
 
@@ -572,7 +569,8 @@ transTopTabs$FADvFS %>%
 
 ```{r ENSDARG00000089477, echo = FALSE, fig.width=10}
 transCounts$counts %>% 
-	cpm(log = TRUE) %>%
+	cpm() %>%
+	add(1) %>%
 	magrittr::extract(
 		dplyr::filter(transVoom$genes, gene_id == "ENSDARG00000089477")$tx_id_version,) %>%
 	as.data.frame() %>% 
@@ -583,15 +581,17 @@ transCounts$counts %>%
 	mutate(tx_id = str_remove(tx_id, "\\.[0-9]+")) %>%
 	ggplot(aes(tx_id, CPM, fill = Genotype)) + 
 	geom_boxplot() +
+	scale_y_log10() +
 	labs(x = "Transcript ID",
-			 y = "logCPM") +
+			 y = "CPM + 1") +
 	ggtitle("Transcripts for ENSDARG00000089477 (si:ch211-132g1.3)") +
 	theme(plot.title = element_text(hjust = 0.5))
 ```
 
 ```{r ENSDARG00000015540, echo = FALSE}
 transCounts$counts %>% 
-	cpm(log = TRUE) %>%
+	cpm() %>%
+	add(1) %>%
 	magrittr::extract(
 		dplyr::filter(transVoom$genes, gene_id == "ENSDARG00000015540")$tx_id_version,) %>%
 	as.data.frame() %>% 
@@ -602,6 +602,7 @@ transCounts$counts %>%
 	mutate(tx_id = str_remove(tx_id, "\\.[0-9]+")) %>%
 	ggplot(aes(tx_id, CPM, fill = Genotype)) + 
 	geom_boxplot() +
+	scale_y_log10() +
 	labs(x = "Transcript ID",
 			 y = "logCPM") +
 	ggtitle("Transcripts for ENSDARG00000015540 (psen2)") +
@@ -610,7 +611,8 @@ transCounts$counts %>%
 
 ```{r ENSDARG00000077180, echo = FALSE, fig.width=10}
 transCounts$counts %>% 
-	cpm(log = TRUE) %>%
+	cpm() %>%
+	add(1) %>%
 	magrittr::extract(
 		dplyr::filter(transVoom$genes, gene_id == "ENSDARG00000077180")$tx_id_version,) %>%
 	as.data.frame() %>% 
@@ -621,6 +623,7 @@ transCounts$counts %>%
 	mutate(tx_id = str_remove(tx_id, "\\.[0-9]+")) %>%
 	ggplot(aes(tx_id, CPM, fill = Genotype)) + 
 	geom_boxplot() +
+	scale_y_log10() +
 	labs(x = "Transcript ID",
 			 y = "logCPM") +
 	ggtitle("Transcripts for ENSDARG00000077180 (slc37a4b)") +
