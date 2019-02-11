@@ -37,7 +37,7 @@ OUTBAM=${OUTDIR}/$(basename ${F1%_R1.fq.gz}.bam)
 echo -e "Currently aligning:\n\t${F1}\n\t${F2}"
 echo -e "Output will be written to ${OUTDIR}"
 kallisto quant \
-	-b 20 \
+	-b 50 \
 	--pseudobam \
 	--single \
 	--fr-stranded \

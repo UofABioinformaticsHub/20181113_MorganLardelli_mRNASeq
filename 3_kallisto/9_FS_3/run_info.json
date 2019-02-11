@@ -1,9 +1,9 @@
 {
 	"n_targets": 57777,
-	"n_bootstraps": 20,
+	"n_bootstraps": 50,
 	"n_processed": 42415861,
 	"kallisto_version": "0.43.1",
 	"index_version": 10,
-	"start_time": "Wed Jan 16 17:36:55 2019",
-	"call": "kallisto quant -b 20 --pseudobam --single --fr-stranded -l 200 -s 20 -i /data/biorefs/reference_genomes/ensembl-release-94/danio-rerio/kallisto/Danio_rerio.GRCz11.cdna.inc.psen2mutants -o /data/biohub/20181113_MorganLardelli_mRNASeq/3_kallisto/9_FS_3 /data/biohub/20181113_MorganLardelli_mRNASeq/1_trimmedData/fastq/9_FS_3_R1.fq.gz /data/biohub/20181113_MorganLardelli_mRNASeq/1_trimmedData/fastq/9_FS_3_2_R1.fq.gz"
+	"start_time": "Mon Feb 11 14:53:57 2019",
+	"call": "kallisto quant -b 50 --pseudobam --single --fr-stranded -l 200 -s 20 -i /data/biorefs/reference_genomes/ensembl-release-94/danio-rerio/kallisto/Danio_rerio.GRCz11.cdna.inc.psen2mutants -o /data/biohub/20181113_MorganLardelli_mRNASeq/3_kallisto/9_FS_3 /data/biohub/20181113_MorganLardelli_mRNASeq/1_trimmedData/fastq/9_FS_3_R1.fq.gz /data/biohub/20181113_MorganLardelli_mRNASeq/1_trimmedData/fastq/9_FS_3_2_R1.fq.gz"
 }
