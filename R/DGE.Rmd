@@ -567,7 +567,7 @@ transTopTabs$FADvFS %>%
 ```
 
 
-```{r ENSDARG00000089477, echo = FALSE, fig.width=10}
+```{r ENSDARG00000089477, echo = FALSE, fig.width=10, fig.cap = "One transcript (ENSDART00000137332) was undetectable in the FS mutants, and this is a non-coding transcript."}
 transCounts$counts %>% 
 	cpm() %>%
 	add(1) %>%
@@ -587,6 +587,16 @@ transCounts$counts %>%
 	ggtitle("Transcripts for ENSDARG00000089477 (si:ch211-132g1.3)") +
 	theme(plot.title = element_text(hjust = 0.5))
 ```
+
+```{r}
+subset(transcripts, gene_id == "ENSDARG00000089477") %>%
+	subset(tx_name %in% rownames(transVoom)) %>%
+	.[order(.$tx_biotype, decreasing = TRUE), c("tx_id", "tx_biotype")] %>% 
+	as.data.frame() %>% 
+	pander(split.tables = Inf, 
+				 captions = "Detected transcripts for ENSDARG00000089477 (si:ch211-132g1.3)")
+```
+
 
 ```{r ENSDARG00000015540, echo = FALSE}
 transCounts$counts %>% 
