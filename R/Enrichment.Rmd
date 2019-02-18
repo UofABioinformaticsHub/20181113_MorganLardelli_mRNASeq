@@ -1,0 +1,86 @@
+---
+title: "Enrichment Analysis"
+author: "Steve Pederson"
+date: "18 February 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+											message = FALSE, warning = FALSE)
+```
+
+## Setup
+
+```{r}
+library(BSgenome.Drerio.UCSC.danRer11)
+library(AnnotationHub)
+library(magrittr)
+library(scales)
+library(pander)
+library(tidyverse)
+```
+
+### Convert Ensembl to UCSC
+
+- In this analysis, the genome used was custom built as BSgenome object using the function `BSgenome::forgeBSgenomeDataPkg()`, using the 2bit file provided as `AH65657` in the package `AnnotationHub()`.
+
+
+```{r}
+z11 <- BSgenome.Drerio.UCSC.danRer11
+ah <- AnnotationHub() %>% subset(species == "Danio rerio")
+gr <- ah[["AH64578"]]
+```
+
+- The GRanges object containing all annotations for known features was then loaded.
+However, the compatibility of the underlying `seqinfo` objects needs to be addressed.
+The seqinfo object of the main genome contains more features, and as such will be used as the foundation for the `GRanges` object.
+Whilst the GRanges object is based on Ensembl annotations and chromosome identifiers, the genome sequences are based on UCSC chromosome identifiers.
+
+```{r}
+ucscLevels <- seqlevels(z11)
+```
+
+- Scaffolds will need to have:
+    + the `v` converted to a '.'
+    + `chr**_` will need to removed from the prefix
+    + `_alt` will need to be removed form the suffix
+    
+```{r}
+ensLevels <- ucscLevels %>%
+	str_remove_all("^chr") %>%
+	str_remove_all("^[0-9Un]+_") %>%
+	str_remove_all("_alt") %>%
+	str_replace_all("v", ".") %>%
+	str_replace_all("^M$", "MT")
+```
+
+```{r}
+ens2Ucsc <- structure(ucscLevels, names = ensLevels)
+seqlevels(gr) <- ens2Ucsc[seqlevels(gr)]
+seqinfo(gr, new2old = match(seqlevels(z11), seqlevels(gr))) <- seqinfo(z11)
+```
+
+## Extract 3' UTR
+
+```{r}
+utr3 <- subset(gr, type == "three_prime_utr")
+utr3Seq <- Views(z11, utr3) %>%
+	DNAStringSet() 
+names(utr3Seq) <- paste(utr3$transcript_id, utr3$gene_name, granges(utr3), sep = "_")
+writeXStringSet(utr3Seq, "utr3.fa.gz", compress = TRUE)
+```
+
+A total of `r comma(length(utr3))` sequences were exported
+
+## Extract 5' UTR
+
+```{r}
+utr5 <- subset(gr, type == "five_prime_utr")
+utr5Seq <- Views(z11, utr5) %>%
+	DNAStringSet() 
+names(utr5Seq) <- paste(utr5$transcript_id, utr5$gene_name, granges(utr5), sep = "_")
+writeXStringSet(utr5Seq, "utr5.fa.gz", compress = TRUE)
+```
+
+A total of `r comma(length(utr5))` sequences were exported
