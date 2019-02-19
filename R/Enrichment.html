@@ -196,6 +196,7 @@ $(document).ready(function () {
 <h2>Setup</h2>
 <pre class="r"><code>library(BSgenome.Drerio.UCSC.danRer11)
 library(AnnotationHub)
+library(plyranges)
 library(magrittr)
 library(scales)
 library(pander)
@@ -230,24 +231,299 @@ gr &lt;- ah[[&quot;AH64578&quot;]]</code></pre>
 seqlevels(gr) &lt;- ens2Ucsc[seqlevels(gr)]
 seqinfo(gr, new2old = match(seqlevels(z11), seqlevels(gr))) &lt;- seqinfo(z11)</code></pre>
 </div>
-</div>
-<div id="extract-3-utr" class="section level2">
-<h2>Extract 3’ UTR</h2>
-<pre class="r"><code>utr3 &lt;- subset(gr, type == &quot;three_prime_utr&quot;)
-utr3Seq &lt;- Views(z11, utr3) %&gt;%
-    DNAStringSet() 
+<div id="extract-3-utr" class="section level3">
+<h3>Extract 3’ UTR</h3>
+<pre class="r"><code>utr3 &lt;- subset(gr, type == &quot;three_prime_utr&quot;)</code></pre>
+<pre class="r"><code>utr3Seq &lt;- Views(z11, utr3) %&gt;% DNAStringSet() 
 names(utr3Seq) &lt;- paste(utr3$transcript_id, utr3$gene_name, granges(utr3), sep = &quot;_&quot;)
 writeXStringSet(utr3Seq, &quot;utr3.fa.gz&quot;, compress = TRUE)</code></pre>
 <p>A total of 34,772 sequences were exported</p>
 </div>
-<div id="extract-5-utr" class="section level2">
-<h2>Extract 5’ UTR</h2>
-<pre class="r"><code>utr5 &lt;- subset(gr, type == &quot;five_prime_utr&quot;)
-utr5Seq &lt;- Views(z11, utr5) %&gt;%
-    DNAStringSet() 
+<div id="extract-5-utr" class="section level3">
+<h3>Extract 5’ UTR</h3>
+<pre class="r"><code>utr5 &lt;- subset(gr, type == &quot;five_prime_utr&quot;)</code></pre>
+<pre class="r"><code>utr5Seq &lt;- Views(z11, utr5) %&gt;% DNAStringSet() 
 names(utr5Seq) &lt;- paste(utr5$transcript_id, utr5$gene_name, granges(utr5), sep = &quot;_&quot;)
 writeXStringSet(utr5Seq, &quot;utr5.fa.gz&quot;, compress = TRUE)</code></pre>
-<p>A total of 48,952 sequences were exported</p>
+<p>A total of 48,952 sequences were exported.</p>
+</div>
+</div>
+<div id="import-sires-results" class="section level2">
+<h2>Import SIREs results</h2>
+<div id="utr" class="section level3">
+<h3>3’ UTR</h3>
+<p>Results from scans of the above sequences using the <a href="http://ccbg.imppc.org/sires/">SIREs website</a> were loaded as data frames, with co-ordinates converted to the underlying genomic co-ordinates, as opposed to being in reference to the submitted sequences</p>
+<pre class="r"><code>ireUtr3 &lt;- file.path(&quot;utr3_sires.gff.gz&quot;) %&gt;% 
+    import.gff() %&gt;%
+    as.data.frame(stringsAsFactors = FALSE) %&gt;%
+    as_tibble()</code></pre>
+<pre class="r"><code>lsm2 &lt;- gr %&gt;% 
+    subset(transcript_id == &quot;ENSDART00000190509&quot;) %&gt;%
+    subset(type == &quot;three_prime_utr&quot;) %&gt;% 
+    with(paste(&quot;ENSDART00000190509&quot;, &quot;LSM2&quot;, granges(.), sep = &quot;_&quot;))</code></pre>
+<p>As the <code>gene_name</code> field for <em>LSM2</em> contained spaces and the phrase <em>“(1 of many)”</em>, this needed to be manually corrected. The loaded matches to IREs in the UTR3 were then converted to a GRanges object.</p>
+<pre class="r"><code>ireUtr3 %&lt;&gt;%
+    mutate(seqnames = as.character(seqnames),
+                 seqnames = str_replace(seqnames, &quot;_chrUn_&quot;, &quot;_chrUn-&quot;),
+                 seqnames = case_when(
+                    grepl(&quot;ENSDART00000190509&quot;, seqnames) ~ lsm2,
+                    !grepl(&quot;ENSDART00000190509&quot;, seqnames) ~ seqnames
+                 )) %&gt;%
+    dplyr::select(-strand) %&gt;%
+    separate(seqnames, c(&quot;transcript_id&quot;, &quot;gene_name&quot;, &quot;location&quot;), sep = &quot;_&quot;) %&gt;%
+    mutate(location = str_replace(location, &quot;chrUn-&quot;, &quot;chrUn_&quot;)) %&gt;%
+    separate(
+        location, 
+        into = c(&quot;seqnames&quot;, &quot;trans_start&quot;, &quot;trans_end&quot;, &quot;strand&quot;),
+        sep = &quot;[:-]&quot;
+    ) %&gt;%
+    mutate_at(c(&quot;trans_start&quot;, &quot;trans_end&quot;), funs(as.integer)) %&gt;%
+    mutate(strand = case_when(
+        strand == &quot;&quot; ~ &quot;-&quot;,
+        strand == &quot;+&quot; ~ &quot;+&quot;
+    ),
+    start = ifelse(
+        strand == &quot;+&quot;, 
+        trans_start + start - 1L,
+        trans_end - end + 1L
+    ),
+    end = start + width - 1) %&gt;%
+    dplyr::select(-contains(&quot;trans_&quot;)) %&gt;%
+    makeGRangesFromDataFrame(
+        keep.extra.columns = TRUE, 
+        seqinfo = seqinfo(gr), 
+        seqnames.field = &quot;seqnames&quot;, 
+        start.field = &quot;start&quot;, 
+        end.field = &quot;end&quot;, 
+        strand.field = &quot;strand&quot;) 
+ireUtr3$gene_id &lt;- mcols(gr)$gene_id[match(ireUtr3$transcript_id, gr$transcript_id)]</code></pre>
+<p>A total of 1,737 IREs were found across 1,207 genes when inspecting the 3’UTR sequences. These can be summarised as:</p>
+<ul>
+<li><p><strong>c8_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">783</td>
+<td align="center">954</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>pred_loop_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">552</td>
+<td align="center">1185</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>pairs_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">ok</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">417</td>
+<td align="center">1320</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>quality</strong>:</p>
+<table style="width:31%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+<col width="11%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">High</th>
+<th align="center">Low</th>
+<th align="center">Medium</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">147</td>
+<td align="center">1054</td>
+<td align="center">536</td>
+</tr>
+</tbody>
+</table></li>
+</ul>
+<!-- end of list -->
+</div>
+<div id="utr-1" class="section level3">
+<h3>5’ UTR</h3>
+<p>The same process was repeated for 5’ UTR IREs, with the exception that this time the gene <em>TMCC1</em> required manual correcting.</p>
+<pre class="r"><code>ireUtr5 &lt;- file.path(&quot;utr5_sires.gff.gz&quot;) %&gt;% 
+    import.gff() %&gt;%
+    as.data.frame(stringsAsFactors = FALSE) %&gt;%
+    as_tibble()</code></pre>
+<pre class="r"><code>tmcc1 &lt;- gr %&gt;% 
+    subset(transcript_id == &quot;ENSDART00000193119&quot;) %&gt;%
+    subset(type == &quot;five_prime_utr&quot;) %&gt;% 
+    with(paste(&quot;ENSDART00000193119&quot;, &quot;TMCC1&quot;, granges(.), sep = &quot;_&quot;))</code></pre>
+<p>As the <code>gene_name</code> field for <em>LSM2</em> contained spaces and the phrase <em>“(1 of many)”</em>, this needed to be manually corrected. The loaded matches to IREs in the UTR5 were then converted to a GRanges object.</p>
+<pre class="r"><code>ireUtr5 %&lt;&gt;%
+    mutate(seqnames = as.character(seqnames),
+                 seqnames = str_replace(seqnames, &quot;_chrUn_&quot;, &quot;_chrUn-&quot;),
+                 seqnames = case_when(
+                    grepl(&quot;ENSDART00000193119&quot;, seqnames) ~ tmcc1,
+                    !grepl(&quot;ENSDART00000193119&quot;, seqnames) ~ seqnames
+                 )) %&gt;%
+    dplyr::select(-strand) %&gt;%
+    separate(seqnames, c(&quot;transcript_id&quot;, &quot;gene_name&quot;, &quot;location&quot;), sep = &quot;_&quot;) %&gt;%
+    mutate(location = str_replace(location, &quot;chrUn-&quot;, &quot;chrUn_&quot;)) %&gt;%
+    separate(
+        location, 
+        into = c(&quot;seqnames&quot;, &quot;trans_start&quot;, &quot;trans_end&quot;, &quot;strand&quot;),
+        sep = &quot;[:-]&quot;
+    ) %&gt;%
+    mutate_at(c(&quot;trans_start&quot;, &quot;trans_end&quot;), funs(as.integer)) %&gt;%
+    mutate(strand = case_when(
+        strand == &quot;&quot; ~ &quot;-&quot;,
+        strand == &quot;+&quot; ~ &quot;+&quot;
+    ),
+    start = ifelse(
+        strand == &quot;+&quot;, 
+        trans_start + start - 1L,
+        trans_end - end + 1L
+    ),
+    end = start + width - 1) %&gt;%
+    dplyr::select(-contains(&quot;trans_&quot;)) %&gt;%
+    makeGRangesFromDataFrame(
+        keep.extra.columns = TRUE, 
+        seqinfo = seqinfo(gr), 
+        seqnames.field = &quot;seqnames&quot;, 
+        start.field = &quot;start&quot;, 
+        end.field = &quot;end&quot;, 
+        strand.field = &quot;strand&quot;)
+ireUtr5$gene_id &lt;- mcols(gr)$gene_id[match(ireUtr5$transcript_id, gr$transcript_id)]</code></pre>
+<p>A total of 558 IREs were found across 393 genes when inspecting the 5’UTR sequences. These can be summarised as:</p>
+<ul>
+<li><p><strong>c8_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">243</td>
+<td align="center">315</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>pred_loop_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">wrong</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">201</td>
+<td align="center">357</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>pairs_class</strong>:</p>
+<table style="width:19%;">
+<colgroup>
+<col width="9%"></col>
+<col width="9%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">good</th>
+<th align="center">ok</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">144</td>
+<td align="center">414</td>
+</tr>
+</tbody>
+</table></li>
+<li><p><strong>quality</strong>:</p>
+<table style="width:29%;">
+<colgroup>
+<col width="9%"></col>
+<col width="8%"></col>
+<col width="11%"></col>
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">High</th>
+<th align="center">Low</th>
+<th align="center">Medium</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">67</td>
+<td align="center">299</td>
+<td align="center">192</td>
+</tr>
+</tbody>
+</table></li>
+</ul>
+<!-- end of list -->
+</div>
+</div>
+<div id="enrichment-analysis" class="section level2">
+<h2>Enrichment Analysis</h2>
+</div>
+<div id="sessioninfo" class="section level2">
+<h2>SessionInfo</h2>
+<p><strong>R version 3.5.2 (2018-12-20)</strong></p>
+<p>**<a href="Platform:**" class="uri">Platform:**</a> x86_64-pc-linux-gnu (64-bit)</p>
+<p><strong>locale:</strong> <em>LC_CTYPE=en_AU.UTF-8</em>, <em>LC_NUMERIC=C</em>, <em>LC_TIME=en_AU.UTF-8</em>, <em>LC_COLLATE=en_AU.UTF-8</em>, <em>LC_MONETARY=en_AU.UTF-8</em>, <em>LC_MESSAGES=en_AU.UTF-8</em>, <em>LC_PAPER=en_AU.UTF-8</em>, <em>LC_NAME=C</em>, <em>LC_ADDRESS=C</em>, <em>LC_TELEPHONE=C</em>, <em>LC_MEASUREMENT=en_AU.UTF-8</em> and <em>LC_IDENTIFICATION=C</em></p>
+<p><strong>attached base packages:</strong> <em>stats4</em>, <em>parallel</em>, <em>stats</em>, <em>graphics</em>, <em>grDevices</em>, <em>utils</em>, <em>datasets</em>, <em>methods</em> and <em>base</em></p>
+<p><strong>other attached packages:</strong> <em>bindrcpp(v.0.2.2)</em>, <em>forcats(v.0.3.0)</em>, <em>stringr(v.1.3.1)</em>, <em>dplyr(v.0.7.8)</em>, <em>purrr(v.0.2.5)</em>, <em>readr(v.1.3.1)</em>, <em>tidyr(v.0.8.2)</em>, <em>tibble(v.2.0.0)</em>, <em>ggplot2(v.3.1.0)</em>, <em>tidyverse(v.1.2.1)</em>, <em>pander(v.0.6.3)</em>, <em>scales(v.1.0.0)</em>, <em>magrittr(v.1.5)</em>, <em>plyranges(v.1.2.0)</em>, <em>AnnotationHub(v.2.14.2)</em>, <em>BSgenome.Drerio.UCSC.danRer11(v.0.99.0)</em>, <em>BSgenome(v.1.50.0)</em>, <em>rtracklayer(v.1.42.1)</em>, <em>Biostrings(v.2.50.2)</em>, <em>XVector(v.0.22.0)</em>, <em>GenomicRanges(v.1.34.0)</em>, <em>GenomeInfoDb(v.1.18.1)</em>, <em>IRanges(v.2.16.0)</em>, <em>S4Vectors(v.0.20.1)</em> and <em>BiocGenerics(v.0.28.0)</em></p>
+<p><strong>loaded via a namespace (and not attached):</strong> <em>nlme(v.3.1-137)</em>, <em>bitops(v.1.0-6)</em>, <em>matrixStats(v.0.54.0)</em>, <em>lubridate(v.1.7.4)</em>, <em>bit64(v.0.9-7)</em>, <em>httr(v.1.4.0)</em>, <em>tools(v.3.5.2)</em>, <em>backports(v.1.1.3)</em>, <em>R6(v.2.3.0)</em>, <em>DBI(v.1.0.0)</em>, <em>lazyeval(v.0.2.1)</em>, <em>colorspace(v.1.3-2)</em>, <em>withr(v.2.1.2)</em>, <em>tidyselect(v.0.2.5)</em>, <em>curl(v.3.2)</em>, <em>bit(v.1.1-14)</em>, <em>compiler(v.3.5.2)</em>, <em>cli(v.1.0.1)</em>, <em>rvest(v.0.3.2)</em>, <em>Biobase(v.2.42.0)</em>, <em>xml2(v.1.2.0)</em>, <em>DelayedArray(v.0.8.0)</em>, <em>digest(v.0.6.18)</em>, <em>Rsamtools(v.1.34.0)</em>, <em>rmarkdown(v.1.11)</em>, <em>pkgconfig(v.2.0.2)</em>, <em>htmltools(v.0.3.6)</em>, <em>rlang(v.0.3.0.1)</em>, <em>readxl(v.1.2.0)</em>, <em>rstudioapi(v.0.8)</em>, <em>RSQLite(v.2.1.1)</em>, <em>shiny(v.1.2.0)</em>, <em>bindr(v.0.1.1)</em>, <em>generics(v.0.0.2)</em>, <em>jsonlite(v.1.6)</em>, <em>BiocParallel(v.1.16.5)</em>, <em>RCurl(v.1.95-4.11)</em>, <em>GenomeInfoDbData(v.1.2.0)</em>, <em>Matrix(v.1.2-15)</em>, <em>Rcpp(v.1.0.0)</em>, <em>munsell(v.0.5.0)</em>, <em>stringi(v.1.2.4)</em>, <em>yaml(v.2.2.0)</em>, <em>SummarizedExperiment(v.1.12.0)</em>, <em>zlibbioc(v.1.28.0)</em>, <em>plyr(v.1.8.4)</em>, <em>grid(v.3.5.2)</em>, <em>blob(v.1.1.1)</em>, <em>promises(v.1.0.1)</em>, <em>crayon(v.1.3.4)</em>, <em>lattice(v.0.20-38)</em>, <em>haven(v.2.0.0)</em>, <em>hms(v.0.4.2)</em>, <em>knitr(v.1.21)</em>, <em>pillar(v.1.3.1)</em>, <em>XML(v.3.98-1.16)</em>, <em>glue(v.1.3.0)</em>, <em>evaluate(v.0.12)</em>, <em>BiocManager(v.1.30.4)</em>, <em>modelr(v.0.1.2)</em>, <em>httpuv(v.1.4.5.1)</em>, <em>cellranger(v.1.1.0)</em>, <em>gtable(v.0.2.0)</em>, <em>assertthat(v.0.2.0)</em>, <em>xfun(v.0.4)</em>, <em>mime(v.0.6)</em>, <em>xtable(v.1.8-3)</em>, <em>broom(v.0.5.1)</em>, <em>later(v.0.7.5)</em>, <em>GenomicAlignments(v.1.18.1)</em>, <em>AnnotationDbi(v.1.44.0)</em>, <em>memoise(v.1.1.0)</em> and <em>interactiveDisplayBase(v.1.20.0)</em></p>
 </div>
 
 

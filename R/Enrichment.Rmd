@@ -12,9 +12,10 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Setup
 
-```{r}
+```{r loadPackages}
 library(BSgenome.Drerio.UCSC.danRer11)
 library(AnnotationHub)
+library(plyranges)
 library(magrittr)
 library(scales)
 library(pander)
@@ -26,7 +27,7 @@ library(tidyverse)
 - In this analysis, the genome used was custom built as BSgenome object using the function `BSgenome::forgeBSgenomeDataPkg()`, using the 2bit file provided as `AH65657` in the package `AnnotationHub()`.
 
 
-```{r}
+```{r z11}
 z11 <- BSgenome.Drerio.UCSC.danRer11
 ah <- AnnotationHub() %>% subset(species == "Danio rerio")
 gr <- ah[["AH64578"]]
@@ -37,7 +38,7 @@ However, the compatibility of the underlying `seqinfo` objects needs to be addre
 The seqinfo object of the main genome contains more features, and as such will be used as the foundation for the `GRanges` object.
 Whilst the GRanges object is based on Ensembl annotations and chromosome identifiers, the genome sequences are based on UCSC chromosome identifiers.
 
-```{r}
+```{r ucscLevels}
 ucscLevels <- seqlevels(z11)
 ```
 
@@ -46,7 +47,7 @@ ucscLevels <- seqlevels(z11)
     + `chr**_` will need to removed from the prefix
     + `_alt` will need to be removed form the suffix
     
-```{r}
+```{r ensLevels}
 ensLevels <- ucscLevels %>%
 	str_remove_all("^chr") %>%
 	str_remove_all("^[0-9Un]+_") %>%
@@ -55,32 +56,194 @@ ensLevels <- ucscLevels %>%
 	str_replace_all("^M$", "MT")
 ```
 
-```{r}
+```{r ens2Ucsc}
 ens2Ucsc <- structure(ucscLevels, names = ensLevels)
 seqlevels(gr) <- ens2Ucsc[seqlevels(gr)]
 seqinfo(gr, new2old = match(seqlevels(z11), seqlevels(gr))) <- seqinfo(z11)
 ```
 
-## Extract 3' UTR
+### Extract 3' UTR
 
-```{r}
+```{r utr3}
 utr3 <- subset(gr, type == "three_prime_utr")
-utr3Seq <- Views(z11, utr3) %>%
-	DNAStringSet() 
+```
+
+
+```{r exportutr3, eval=FALSE}
+utr3Seq <- Views(z11, utr3) %>% DNAStringSet() 
 names(utr3Seq) <- paste(utr3$transcript_id, utr3$gene_name, granges(utr3), sep = "_")
 writeXStringSet(utr3Seq, "utr3.fa.gz", compress = TRUE)
 ```
 
 A total of `r comma(length(utr3))` sequences were exported
 
-## Extract 5' UTR
+### Extract 5' UTR
 
-```{r}
+```{r utr5}
 utr5 <- subset(gr, type == "five_prime_utr")
-utr5Seq <- Views(z11, utr5) %>%
-	DNAStringSet() 
+```
+
+
+```{r exportutr5, eval=FALSE}
+utr5Seq <- Views(z11, utr5) %>% DNAStringSet() 
 names(utr5Seq) <- paste(utr5$transcript_id, utr5$gene_name, granges(utr5), sep = "_")
 writeXStringSet(utr5Seq, "utr5.fa.gz", compress = TRUE)
 ```
 
-A total of `r comma(length(utr5))` sequences were exported
+A total of `r comma(length(utr5))` sequences were exported.
+
+## Import SIREs results
+
+### 3' UTR
+
+Results from scans of the above sequences using the [SIREs website](http://ccbg.imppc.org/sires/) were loaded as data frames, with co-ordinates converted to the underlying genomic co-ordinates, as opposed to being in reference to the submitted sequences
+
+```{r importSireUtr3}
+ireUtr3 <- file.path("utr3_sires.gff.gz") %>% 
+	import.gff() %>%
+	as.data.frame(stringsAsFactors = FALSE) %>%
+	as_tibble()
+```
+
+```{r lsm2}
+lsm2 <- gr %>% 
+	subset(transcript_id == "ENSDART00000190509") %>%
+	subset(type == "three_prime_utr") %>% 
+	with(paste("ENSDART00000190509", "LSM2", granges(.), sep = "_"))
+```
+
+As the `gene_name` field for *LSM2* contained spaces and the phrase *"(1 of many)"*, this needed to be manually corrected.
+The loaded matches to IREs in the UTR3 were then converted to a GRanges object.
+
+```{r utr3ToGRanges}
+ireUtr3 %<>%
+	mutate(seqnames = as.character(seqnames),
+				 seqnames = str_replace(seqnames, "_chrUn_", "_chrUn-"),
+				 seqnames = case_when(
+				 	grepl("ENSDART00000190509", seqnames) ~ lsm2,
+				 	!grepl("ENSDART00000190509", seqnames) ~ seqnames
+				 )) %>%
+	dplyr::select(-strand) %>%
+	separate(seqnames, c("transcript_id", "gene_name", "location"), sep = "_") %>%
+	mutate(location = str_replace(location, "chrUn-", "chrUn_")) %>%
+	separate(
+		location, 
+		into = c("seqnames", "trans_start", "trans_end", "strand"),
+		sep = "[:-]"
+	) %>%
+	mutate_at(c("trans_start", "trans_end"), funs(as.integer)) %>%
+	mutate(strand = case_when(
+		strand == "" ~ "-",
+		strand == "+" ~ "+"
+	),
+	start = ifelse(
+		strand == "+", 
+		trans_start + start - 1L,
+		trans_end - end + 1L
+	),
+	end = start + width - 1) %>%
+	dplyr::select(-contains("trans_")) %>%
+	makeGRangesFromDataFrame(
+		keep.extra.columns = TRUE, 
+		seqinfo = seqinfo(gr), 
+		seqnames.field = "seqnames", 
+		start.field = "start", 
+		end.field = "end", 
+		strand.field = "strand") 
+ireUtr3$gene_id <- mcols(gr)$gene_id[match(ireUtr3$transcript_id, gr$transcript_id)]
+```
+
+A total of `r comma(length(ireUtr3))` IREs were found across `r comma(length(unique(ireUtr3$gene_id)))` genes when inspecting the 3'UTR sequences.
+These can be summarised as:
+
+```{r summariseUtr3, echo=FALSE}
+ireUtr3 %>% 
+	mcols() %>% 
+	as.data.frame() %>% 
+	select(ends_with("class"), quality) %>% 
+	lapply(table) %>% 
+	pander()
+```
+
+
+
+### 5' UTR
+
+The same process was repeated for 5' UTR IREs, with the exception that this time the gene *TMCC1* required manual correcting.
+
+```{r importUtr5}
+ireUtr5 <- file.path("utr5_sires.gff.gz") %>% 
+	import.gff() %>%
+	as.data.frame(stringsAsFactors = FALSE) %>%
+	as_tibble()
+```
+
+```{r tmcc1}
+tmcc1 <- gr %>% 
+	subset(transcript_id == "ENSDART00000193119") %>%
+	subset(type == "five_prime_utr") %>% 
+	with(paste("ENSDART00000193119", "TMCC1", granges(.), sep = "_"))
+```
+
+The loaded matches to IREs in the UTR5 were then converted to a GRanges object.
+
+```{r utr5ToGRanges}
+ireUtr5 %<>%
+	mutate(seqnames = as.character(seqnames),
+				 seqnames = str_replace(seqnames, "_chrUn_", "_chrUn-"),
+				 seqnames = case_when(
+				 	grepl("ENSDART00000193119", seqnames) ~ tmcc1,
+				 	!grepl("ENSDART00000193119", seqnames) ~ seqnames
+				 )) %>%
+	dplyr::select(-strand) %>%
+	separate(seqnames, c("transcript_id", "gene_name", "location"), sep = "_") %>%
+	mutate(location = str_replace(location, "chrUn-", "chrUn_")) %>%
+	separate(
+		location, 
+		into = c("seqnames", "trans_start", "trans_end", "strand"),
+		sep = "[:-]"
+	) %>%
+	mutate_at(c("trans_start", "trans_end"), funs(as.integer)) %>%
+	mutate(strand = case_when(
+		strand == "" ~ "-",
+		strand == "+" ~ "+"
+	),
+	start = ifelse(
+		strand == "+", 
+		trans_start + start - 1L,
+		trans_end - end + 1L
+	),
+	end = start + width - 1) %>%
+	dplyr::select(-contains("trans_")) %>%
+	makeGRangesFromDataFrame(
+		keep.extra.columns = TRUE, 
+		seqinfo = seqinfo(gr), 
+		seqnames.field = "seqnames", 
+		start.field = "start", 
+		end.field = "end", 
+		strand.field = "strand")
+ireUtr5$gene_id <- mcols(gr)$gene_id[match(ireUtr5$transcript_id, gr$transcript_id)]
+```
+
+A total of `r comma(length(ireUtr5))` IREs were found across `r comma(length(unique(ireUtr5$gene_id)))` genes when inspecting the 5'UTR sequences.
+These can be summarised as:
+
+```{r summariseUtr5, echo=FALSE}
+ireUtr5 %>% 
+	mcols() %>% 
+	as.data.frame() %>% 
+	select(ends_with("class"), quality) %>% 
+	lapply(table) %>% 
+	pander()
+```
+
+
+## Enrichment Analysis
+
+## SessionInfo
+
+```{r sessionInfo, echo=FALSE}
+pander(sessionInfo())
+```
+
+
