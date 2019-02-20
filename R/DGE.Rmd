@@ -62,7 +62,8 @@ transcripts %<>%
 	sort()
 transcripts$symbol <- mcols(genes[transcripts$gene_id])$symbol
 # tx2gene <- mcols(transcripts)[c("tx_id_version", "gene_id")] 
-tx2gene <- mcols(transcripts)[c("tx_id_version", "symbol")] 
+tx2gene <- mcols(transcripts)[c("tx_id_version", "symbol")] %>%
+	subset(symbol != "")
 ```
 
 
@@ -191,9 +192,10 @@ No increases in expression of the WT allele were evident, supporting a lack of g
 This sample was then removed from all objects, along with `12_WT_4` which had been consistently down-weighted.
 
 ```{r removeSample}
-transVoom <- transVoom[, !colnames(transVoom) %in% c("8_FS_4", "12_WT_4")]
-geneVoom <- geneVoom[, !colnames(geneVoom) %in% c("8_FS_4", "12_WT_4")]
-dge <- dge[,!colnames(dge) %in% c("8_FS_4", "12_WT_4")]
+dropSamples <- c("8_FS_4", "12_WT_4")[1]
+transVoom <- transVoom[, !colnames(transVoom) %in% dropSamples]
+geneVoom <- geneVoom[, !colnames(geneVoom) %in% dropSamples]
+dge <- dge[,!colnames(dge) %in% dropSamples]
 ```
 
 
@@ -505,6 +507,95 @@ cpm(dge) %>%
 	theme(legend.position = c(5/6, 1/4))
 ```
 
+### Similarity between Mutants
+
+Although there were minimal DE genes in the above analysis, the similarity between differential expression values (i.e. logFC) was inspected visually.
+
+```{r plotMutantComparison, echo=FALSE, fig.cap = "*Comparison between mutants showing logFC for each mutant, based on comparison against WT samples. Genes considered statistically significant between mutants are highlighted in red, however several other genes demonstrated either highly similar behaviour, or were suggestive of different behviours. These genes are labelled in grey. Dahed horizontal and vertical lines have been placed at $\\pm1$, with the unit line also shown in pale blue.*"}
+geneFit$coefficients %>%
+	as.data.frame() %>%
+	rownames_to_column("gene_name") %>%
+	mutate(Sig = gene_name %in% dplyr::filter(geneTopTabs$FADvFS, Sig)$symbol) %>%
+	ggplot(aes(FSvWT, FADvWT, colour = Sig)) +
+	geom_abline(slope = 1, intercept = 0, linetype = 2, colour = rgb(0.8, 0.8, 1)) +
+	geom_vline(xintercept = c(-1, 1), linetype = 2, colour = "grey60") +
+	geom_hline(yintercept = c(-1, 1), linetype = 2, colour = "grey60") +
+	geom_point(alpha = 0.5) +
+	geom_text_repel(aes(label = gene_name),
+									. %>% dplyr::filter(Sig),
+									colour = "red") +
+	geom_text_repel(aes(label = gene_name),
+									. %>% dplyr::filter(!Sig, FADvWT > 4),
+									colour = "grey60") +
+	geom_text_repel(aes(label = gene_name),
+									. %>% dplyr::filter(!Sig, FADvWT < -3),
+									colour = "grey60") +
+	geom_text_repel(aes(label = gene_name),
+									. %>% dplyr::filter(!Sig, 
+																			abs(FSvWT) > 4.8,
+																			abs(FADvWT) < 2),
+									colour = "grey60") +
+	scale_colour_manual(values = c("grey50", "red")) +
+	scale_x_continuous(breaks = seq(-8, 8, by = 4), minor_breaks = seq(-10, 10, by = 2)) +
+	scale_y_continuous(breaks = seq(-4, 8, by = 4), minor_breaks = seq(-4, 8, by = 2)) +
+	labs(x = "logFC (FS Vs WT)",
+			 y = "logFC (FAD Vs WT)") +
+	theme(legend.position = "none")
+```
+
+```{r, echo=FALSE, fig.cap = "*Expression patterns for genes showing similiarity of apparent differential expression across both mutants when compared to WT samples. In all cases one or more outlier points appears to have impacted the ability for these genes to be considered as DE. With the exception of the first two genes, these outliers samples were not consistent. Jitter has been added to the x-axis.*"}
+genes2plot <- c("AL929206.1", "BX004838.1", "si:ch211-233m11.1", "si:ch211-181d7.1", "zgc:55461", "BX323045.1")
+plotly::ggplotly(
+	cpm(dge) %>% 
+		add(1) %>%
+		magrittr::extract(genes2plot,) %>%
+		as.data.frame() %>%
+		rownames_to_column("ID") %>%
+		gather(key = "Sample", value = "CPM", -ID) %>%
+		as_tibble() %>%
+		left_join(geneVoom$targets) %>%
+		ggplot(aes(Genotype, CPM, colour = Genotype, size = sample.weights, label = Sample)) +
+		geom_jitter(width = 0.25) + 
+		labs(y = "CPM + 1") +
+		facet_wrap(~ID, scales = "free_y") +
+		scale_y_log10() +
+		theme(legend.position = "none")
+)
+```
+
+```{r, echo=FALSE, fig.cap = "*Expression patterns for genes showing potential differences in apparent differential expression across both mutants when compared to WT samples. In all cases one or more outlier points appears to have impacted the ability for these genes to be considered as DE. With the exception of the second and third genes in the top row, these outliers samples were not consistent. Jitter has been added to the x-axis.*", fig.height=9}
+genes2plot <- c("arrdc1b", "BX324227.3", "BX324227.2", "CR626939.1", "CR381638.1", "si:ch211-76m11.3", "mybpc2b", "BX470069.1")
+plotly::ggplotly(
+	cpm(dge) %>% 
+		add(1) %>%
+		magrittr::extract(genes2plot,) %>%
+		as.data.frame() %>%
+		rownames_to_column("ID") %>%
+		gather(key = "Sample", value = "CPM", -ID) %>%
+		as_tibble() %>%
+		left_join(geneVoom$targets) %>%
+		ggplot(aes(Genotype, CPM, colour = Genotype, size = sample.weights, label = Sample)) +
+		geom_jitter(width = 0.25) + 
+		labs(y = "CPM + 1") +
+		facet_wrap(~ID, scales = "free_y") +
+		scale_y_log10() +
+		theme(legend.position = "none")
+)
+```
+
+
+```{r, results='hide'}
+names(geneTopTabs) %>%
+	lapply(function(x){
+		nm <- paste0(x, ".tsv.gz") %>% gzfile("w")
+		geneTopTabs[[x]] %>%
+			dplyr::select(-Sig) %>%
+			write_tsv(nm)
+		close(nm)
+	})
+```
+
+
 ## Differential Transcript Expression
 
 As the level of transcript complexity is less in zebrafish than human, and 1:1 mapping between species is less robust, only a brief analysis was performed at the transcript level.
@@ -638,5 +729,11 @@ transCounts$counts %>%
 			 y = "logCPM") +
 	ggtitle("Transcripts for ENSDARG00000077180 (slc37a4b)") +
 	theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Session Info
+
+```{r sessionInfo, echo=FALSE}
+pander(sessionInfo())
 ```
 
