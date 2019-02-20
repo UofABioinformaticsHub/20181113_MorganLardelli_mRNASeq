@@ -1,8 +1,13 @@
 ---
 title: "Enrichment Analysis"
 author: "Steve Pederson"
-date: "18 February 2019"
-output: html_document
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document: 
+    fig_caption: yes
+    fig_height: 6
+    fig_width: 8
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -16,6 +21,7 @@ knitr::opts_chunk$set(echo = TRUE,
 library(BSgenome.Drerio.UCSC.danRer11)
 library(AnnotationHub)
 library(plyranges)
+library(fgsea)
 library(magrittr)
 library(scales)
 library(pander)
@@ -239,6 +245,107 @@ ireUtr5 %>%
 
 
 ## Enrichment Analysis
+
+### Gene Set Definitions
+
+At this point, we need to create multiple (overlapping) gene sets which define the putative IREs.
+The initial gene-sets being formed are:
+
+- **3'UTR HQ**: The High quality IREs in the 3' UTR
+- **3'UTR ALL**: All putative IREs in the 3'UTR
+- **5'UTR HQ**: The High quality IREs in the 5' UTR
+- **5'UTR ALL**: All putative IREs in the 5'UTR
+
+```{r ireSets}
+ireSets <- list(
+	utr3HQ = ireUtr3 %>% 
+		subset(quality == "High") %>% 
+		mcols() %>% 
+		extract2("gene_name") %>% 
+		unique(),
+	utr3ALL = ireUtr3 %>% 
+		mcols() %>% 
+		extract2("gene_name") %>% 
+		unique(),
+	utr5HQ = ireUtr5 %>% 
+		subset(quality == "High") %>% 
+		mcols() %>% 
+		extract2("gene_name") %>% 
+		unique(),
+	utr5ALL = ireUtr5 %>% 
+		mcols() %>% 
+		extract2("gene_name") %>% 
+		unique()
+)
+```
+
+This gave gene sets of the following sizes:
+
+```{r setLengths, echo=FALSE}
+pander(sapply(ireSets, length))
+```
+
+### GSEA
+
+The tables containing fold-change (logFC), $t$-statistics and $p$-values from the previous analysis were loaded into the workspace.
+
+```{r loadDGE}
+expressionData <- list.files(pattern = "tsv.gz", full.names = TRUE) %>%
+	sapply(gzfile, simplify = FALSE) %>%
+	lapply(read_tsv) %>%
+	set_names(basename(names(.))) %>%
+	set_names(str_remove(names(.), ".tsv.gz"))
+```
+
+#### Ranks using $t$-statistics
+
+```{r gseaByT}
+nPerm <- 1e5
+m <- length(expressionData)*length(ireSets)
+gseaByT <- expressionData %>%
+	lapply(function(x){
+		ranks <- structure(x$t, names = x$symbol) %>% sort
+		fgsea(ireSets, ranks, nperm = nPerm, nproc = 6)
+	}) %>%
+	lapply(function(x){
+		x$FDR <- x$padj
+		x$padj <- p.adjust(x$pval, "bonferroni", n = m)
+		x
+	})
+```
+
+A simple GSEA (Gene Set Enrichment Analysis) was performed on all three gene lists (`r pander(names(expressionData))`) ranked by $t$-statistic, using the `r length(ireSets)` sets of IREs as defined above.
+In order to determine significance, `r comma(nPerm)` permutations were performed.
+Given the three comparisons and four gene-sets, all $p$-values were additionally corrected using Bonferroni's method across the entire set of comparisons, as well as leaving the default FDR adjusted p-values returned by the algorithm.
+A potentially significant result was found in the comparison between FAD-like mutants and WT when including all potential IREs, including the low quality predictions.
+
+```{r allGSEAres, echo=FALSE}
+gseaByT$FADvFS %>%
+	as_tibble() %>%
+	dplyr::select(-leadingEdge) %>%
+	dplyr::select(pathway, pval, FDR, padj, everything()) %>%
+	pander(caption = "Results for DE genes in the comparison between FS & FAD mutants")
+gseaByT$FSvWT %>%
+	as_tibble() %>%
+	dplyr::select(-leadingEdge) %>%
+	dplyr::select(pathway, pval, FDR, padj, everything()) %>%
+	pander(caption = "Results for DE genes in the comparison between FS mutants & WT")
+gseaByT$FADvWT %>%
+	as_tibble() %>%
+	dplyr::select(-leadingEdge) %>%
+	dplyr::select(pathway, pval, FDR, padj, everything()) %>%
+	pander(caption = "Results for DE genes in the comparison between FAD mutants & WT")
+```
+
+
+```{r enrichPlot, echo=FALSE, fig.height=4, fig.cap="*Enrichment for ALL UTR3 IREs in the comparison between FAD_like mutants and WT. Whilst enrichment was technically found in the down-regulated genes, it was noted that there seemed to be an apparent symmetry to the enrichment score. However, testing using p-values for the ranking score failed to reveal any significance.*"}
+plotEnrichment(
+	ireSets$utr3ALL,
+	structure(expressionData$FADvWT$t, names = expressionData$FADvWT$symbol) %>% sort
+	) +
+	labs(title = "FAD vs WT: All putative IREs in the 3'UTR")
+```
+
 
 ## SessionInfo
 

@@ -189,7 +189,8 @@ However for sample `8_FS_4`, no WT allele was detected which is quite inexplicab
 The remaining FS samples showed reduced abundance of the FS transcript, as expected under NMD.
 No increases in expression of the WT allele were evident, supporting a lack of genetic compensation.
 
-This sample was then removed from all objects, along with `12_WT_4` which had been consistently down-weighted.
+This sample was then removed from all objects.
+<!-- , along with `12_WT_4` which had been consistently down-weighted. -->
 
 ```{r removeSample}
 dropSamples <- c("8_FS_4", "12_WT_4")[1]
