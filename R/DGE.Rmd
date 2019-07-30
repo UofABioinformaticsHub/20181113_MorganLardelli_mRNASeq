@@ -26,7 +26,14 @@ library(magrittr)
 library(scales)
 library(tidyverse)
 library(ggrepel)
+library(fgsea)
 library(pander)
+library(here)
+```
+
+```{r otherOptions}
+if (interactive()) setwd(here("R"))
+panderOptions("table.split.table", Inf)
 theme_set(theme_bw())
 ```
 
@@ -595,6 +602,208 @@ names(geneTopTabs) %>%
 		close(nm)
 	})
 ```
+
+## Enrichment Analysis 
+
+### Hallmark Gene Sets
+
+```{r ens2Entrez}
+ens2Entrez <- read_tsv("~/Documents/Zebrafish_RNAseq_DE/data/z11Ensembl_hg38Entrez.tsv") %>%
+	set_names(c("GENEID", "EntrezID"))
+```
+
+```{r ranks}
+ranks <- list(
+	FSvWT = genes %>%
+		as.data.frame() %>%
+		dplyr::select(gene_id, symbol) %>%
+		right_join(geneTopTabs$FSvWT) %>%
+		as_tibble() %>%
+		arrange(t) %>%
+		with(structure(t, names = gene_id)),
+	FADvWT = genes %>%
+		as.data.frame() %>%
+		dplyr::select(gene_id, symbol) %>%
+		right_join(geneTopTabs$FADvWT) %>%
+		as_tibble() %>%
+		arrange(t) %>%
+		with(structure(t, names = gene_id))
+)
+```
+
+
+```{r hallmarkEns}
+hallmarkEns <- file.path("~/Documents/Zebrafish_RNAseq_DE/data/", "h.all.v6.2.entrez.gmt") %>%
+	gmtPathways() %>%
+	mclapply(function(x){
+		dplyr::filter(ens2Entrez, EntrezID %in% x)$GENEID %>%
+			unique()
+	}, mc.cores = 12)
+```
+
+
+```{r hallmarkRes}
+set.seed(123)
+hallmarkRes <- names(ranks) %>%
+	lapply(function(x){
+		fgsea(hallmarkEns, ranks[[x]], nperm = 1e5) %>% 
+			as_tibble() %>%
+			arrange(pval) %>%
+			mutate(
+				padj = p.adjust(pval, "bonferroni"),
+				fdr = p.adjust(pval, "fdr")
+			)
+	}) %>%
+	set_names(names(ranks))
+```
+
+```{r}
+names(hallmarkRes) %>% 
+	lapply(function(x){ mutate(hallmarkRes[[x]], comparison = x)}) %>% 
+	bind_rows() %>% 
+	dplyr::select(pathway, NES, comparison) %>%
+	spread(key = comparison, NES) %>% 
+	mutate(pathway = str_remove_all(pathway, "HALLMARK_")) %>% 
+	ggplot(aes(FADvWT, FSvWT)) + 
+	geom_text_repel(aes(label = pathway)) + 
+	geom_point() + 
+	geom_abline(slope = 1, intercept = 0, linetype = 2, colour = "grey50") + 
+	geom_hline(yintercept = hallmarkRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(c(-1, 1)), 
+						 colour = "red", linetype = 2) + 
+	geom_vline(xintercept = hallmarkRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(c(-1, 1)), 
+						 colour = "red", linetype = 2) +
+	annotate("rect", 
+					 xmin = hallmarkRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(-1),
+					 xmax = hallmarkRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min(),
+					 ymin = hallmarkRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(-1),
+					 ymax = hallmarkRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min(),
+					 fill = "grey50",
+					 alpha = 0.2
+	) +
+	labs(x = "Normalised Enrichment Score (FADvWT)",
+			 y = "Normalised Enrichment Score (FSvWT)")
+```
+
+```{r}
+hallmarkRes %>% write_rds("psen2_FSHetVsWt_FADHetVsWt_hallmark_gsea.rds")
+```
+
+### KEGG Gene Sets
+
+```{r keggEns}
+keggEns <- file.path("~/Documents/Zebrafish_RNAseq_DE/data/c2.cp.kegg.v6.2.entrez.gmt") %>%
+	gmtPathways() %>%
+	mclapply(function(x){
+		dplyr::filter(ens2Entrez, EntrezID %in% x)$GENEID %>%
+			unique()
+	}, mc.cores = 12)
+```
+
+
+```{r keggRes}
+set.seed(123)
+keggRes <- names(ranks) %>%
+	lapply(function(x){
+		fgsea(keggEns, ranks[[x]], nperm = 1e5) %>% 
+			as_tibble() %>%
+			arrange(pval) %>%
+			mutate(
+				padj = p.adjust(pval, "bonferroni"),
+				fdr = p.adjust(pval, "fdr")
+			)
+	}) %>%
+	set_names(names(ranks))
+```
+
+```{r, eval = FALSE}
+names(keggRes) %>% 
+	lapply(function(x){ mutate(keggRes[[x]], comparison = x)}) %>% 
+	bind_rows() %>% 
+	dplyr::select(pathway, NES, comparison) %>%
+	spread(key = comparison, NES) %>% 
+	mutate(pathway = str_remove_all(pathway, "KEGG_")) %>% 
+	ggplot(aes(FADvWT, FSvWT)) + 
+	geom_text_repel(aes(label = pathway)) + 
+	geom_point() + 
+	geom_abline(slope = 1, intercept = 0, linetype = 2, colour = "grey50") + 
+	geom_hline(yintercept = keggRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(c(-1, 1)), 
+						 colour = "red", linetype = 2) + 
+	geom_vline(xintercept = keggRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(c(-1, 1)), 
+						 colour = "red", linetype = 2) +
+	annotate("rect", 
+					 xmin = keggRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(-1),
+					 xmax = keggRes$FADvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min(),
+					 ymin = keggRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min() %>%
+						 	multiply_by(-1),
+					 ymax = keggRes$FSvWT %>%
+						 	dplyr::filter(fdr < 0.05) %>%
+						 	.[["NES"]] %>%
+						 	abs %>%
+						 	min(),
+					 fill = "grey50",
+					 alpha = 0.2
+	) +
+	labs(
+		x = "Normalised Enrichment Score (FADvWT)",
+		y = "Normalised Enrichment Score (FSvWT)"
+	)
+```
+
+```{r}
+keggRes %>% write_rds("psen2_FSHetVsWt_FADHetVsWt_kegg_gsea.rds")
+```
+
 
 
 ## Differential Transcript Expression
